@@ -157,12 +157,29 @@ async function pingEndpoints() {
     process.env.API_ENDPOINT_2,
     process.env.API_ENDPOINT_3,
   ].filter(Boolean) as string[];
+
+  const siteId = "1451470260579512322";
+  const siteCode = "ybaxcf-4";
+  const platformType = "2";
+  const token = process.env.H25_TOKEN1; // Replace YOUR_TOKEN_HERE with the actual token
+
+  const headers = {
+    token: token,
+    Accept: "application/json, text/plain, */*",
+  };
+
   for (const endpoint of endpoints) {
     try {
-      const response = await axios.get(endpoint);
+      const url = `${endpoint}/v/user/refreshUserFund?siteId=${siteId}&siteCode=${siteCode}&platformType=${platformType}`;
+      const response = await axios.get(url, { headers });
+
       if (response.status === 200) {
         apiEndpoints.push(endpoint);
-        console.log(`Endpoint ${endpoint} is reachable.`);
+        if (response.data.code === 10000) {
+          console.log(`Token ${token} is ready.`);
+        } else if (response.data.code === 10140) {
+          console.log(`Token ${token} is expired.`);
+        }
       } else {
         console.error(
           `Endpoint ${endpoint} is not reachable. Status code: ${response.status}`

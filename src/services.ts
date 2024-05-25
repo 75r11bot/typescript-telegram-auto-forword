@@ -58,7 +58,7 @@ async function sendRequest(
         break;
       case 10140:
         console.log("Token expired. Updating token and retrying request...");
-        headers["Token"] = process.env.H25_TOKEN2 || "";
+        headers["token"] = process.env.H25_TOKEN2 || "";
         await new Promise((resolve) =>
           setTimeout(resolve, RATE_LIMIT_INTERVAL_MS)
         );
