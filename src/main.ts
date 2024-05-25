@@ -12,7 +12,7 @@ dotenv.config();
 
 const apiId = Number(process.env.API_ID);
 const apiHash = process.env.API_HASH || "";
-const sourceChannelId = Number(process.env.TEST_SOURCE_CHANNEL_ID);
+const sourceChannelId = Number(process.env.SOURCE_CHANNEL_ID);
 const destinationChannelId = Number(process.env.DESTINATION_CHANNEL_ID);
 const phoneNumber = process.env.APP_YOUR_PHONE || "";
 const userPassword = process.env.APP_YOUR_PWD || "";
