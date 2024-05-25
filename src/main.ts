@@ -54,18 +54,18 @@ async function getLoginCode(): Promise<string> {
   return new Promise<string>(async (resolve, reject) => {
     const timeout = setTimeout(() => {
       reject(new Error("Timeout"));
-    }, 30000); // Timeout after 30 seconds
+    }, 20000); // Timeout after 60 seconds
 
-    const handler = (event: any) => {
+    const handler = async (event: any) => {
       const message = event.message;
-      console.log("getLoginCode: received message", message);
+      console.log("Received message for login code:", message.message);
 
       if (
         message.peerId &&
         message.peerId.channelId &&
         message.peerId.channelId.equals(telegramChannelId)
       ) {
-        const match = message.message.match(/Login code: (\d+)/);
+        const match = message.message.match(/(\d{5,6})/);
         if (match) {
           clearTimeout(timeout); // Clear the timeout
           client.removeEventHandler(handler, new NewMessage({})); // Remove the handler
@@ -77,7 +77,6 @@ async function getLoginCode(): Promise<string> {
     client.addEventHandler(handler, new NewMessage({}));
   }).catch(async (error) => {
     console.error("Error getting login code:", error);
-    // Handle error or prompt user for login code input
     return await get_input("Enter the code: ");
   });
 }
@@ -110,18 +109,18 @@ async function forwardNewMessages() {
       console.log("Source Entity:", sourceEntity);
       console.log("Destination Entity:", destinationEntity);
 
-      // Check if the message is from the correct source channel
       if (
         event.message &&
         event.message.peerId &&
-        event.message.peerId.channelId &&
         event.message.peerId.channelId.equals(sourceEntity.id)
       ) {
+        await processBonusCode(apiEndpoints, event.message.message);
+        console.log("processBonusCode called successfully");
+
         console.log(
           `Forwarding message with ID ${event.message.id} from ${sourceChannelId} to ${destinationChannelId}`
         );
 
-        // Forward the message to the destination channel
         await client.forwardMessages(destinationEntity, {
           fromPeer: sourceEntity,
           messages: [event.message.id],
@@ -130,10 +129,6 @@ async function forwardNewMessages() {
         console.log(
           `Message forwarded from ${sourceChannelId} to ${destinationChannelId}`
         );
-
-        // Call processBonusCode function
-        await processBonusCode(apiEndpoints, event.message.message);
-        console.log("processBonusCode called successfully");
       } else {
         console.log(
           "New Message received from the source channel, cannot forward it to the destination channel"
@@ -142,23 +137,20 @@ async function forwardNewMessages() {
     } catch (error: any) {
       console.error("Error handling new message event:", error);
 
-      // Generic error handling
-      if (error.message && error.message.includes("FloodWait")) {
+      if (error.message.includes("FloodWait")) {
         console.error(
           "FloodWait error: Too many requests in a short period. Try again later."
         );
       } else if (
-        error.message &&
-        (error.message.includes("ChatWriteForbidden") ||
-          error.message.includes("ChatForbidden"))
+        error.message.includes("ChatWriteForbidden") ||
+        error.message.includes("ChatForbidden")
       ) {
         console.error(
           "ChatWriteForbidden error: Bot or user does not have permission to write to the destination channel"
         );
       } else if (
-        error.message &&
-        (error.message.includes("MessageNotModified") ||
-          error.message.includes("WebPageNotModified"))
+        error.message.includes("MessageNotModified") ||
+        error.message.includes("WebPageNotModified")
       ) {
         console.error(
           "MessageNotModified error: Message content has not been modified"
@@ -218,12 +210,13 @@ async function startClient() {
       password: async () => userPassword,
       phoneCode: async () => await getLoginCode(),
       onError: (err: Error) => {
-        console.log("Client start error:", err.message);
         if (err.message.includes("AUTH_KEY_DUPLICATED")) {
           console.log(
             "AUTH_KEY_DUPLICATED error detected. Regenerating session..."
           );
           regenerateSession();
+        } else {
+          console.log("Client start error:", err);
         }
       },
     });
@@ -239,12 +232,9 @@ async function startClient() {
 async function regenerateSession() {
   try {
     console.log("Regenerating session...");
-    // Example: fs.unlinkSync(sessionFilePath);
-    await fs.promises.unlink(sessionFilePath);
     await startClient();
   } catch (error) {
     console.error("Failed to regenerate session:", error);
-    // Retry regeneration if failed
     setTimeout(regenerateSession, 5000); // Retry after 5 seconds
   }
 }
