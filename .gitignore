@@ -2,7 +2,8 @@
 node_modules/
 
 # Compiled output
-dist/
+dist/*
+!dist/.gitkeep
 
 # Ignore .gitignore files within dist directory and its subdirectories
 dist/**/*.gitignore
