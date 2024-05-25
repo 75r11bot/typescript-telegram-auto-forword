@@ -12,7 +12,7 @@ dotenv.config();
 
 const apiId = Number(process.env.API_ID);
 const apiHash = process.env.API_HASH || "";
-const sourceChannelId = Number(process.env.SOURCE_CHANNEL_ID);
+const sourceChannelId = Number(process.env.TEST_SOURCE_CHANNEL_ID);
 const destinationChannelId = Number(process.env.DESTINATION_CHANNEL_ID);
 const phoneNumber = process.env.APP_YOUR_PHONE || "";
 const userPassword = process.env.APP_YOUR_PWD || "";
@@ -54,7 +54,7 @@ async function getLoginCode(): Promise<string> {
   return new Promise<string>(async (resolve, reject) => {
     const timeout = setTimeout(() => {
       reject(new Error("Timeout"));
-    }, 20000); // Timeout after 60 seconds
+    }, 60000); // Timeout after 60 seconds
 
     const handler = async (event: any) => {
       const message = event.message;
@@ -109,26 +109,26 @@ async function forwardNewMessages() {
       console.log("Source Entity:", sourceEntity);
       console.log("Destination Entity:", destinationEntity);
 
-      if (
-        event.message &&
-        event.message.peerId &&
-        event.message.peerId.channelId.equals(sourceEntity.id)
-      ) {
-        await processBonusCode(apiEndpoints, event.message.message);
-        console.log("processBonusCode called successfully");
+      const message = event.message;
+      const peerId = message.peerId;
+      const channelId = peerId && peerId.channelId;
 
+      if (channelId && channelId.equals(sourceEntity.id)) {
         console.log(
-          `Forwarding message with ID ${event.message.id} from ${sourceChannelId} to ${destinationChannelId}`
+          `Forwarding message with ID ${message.id} from ${sourceChannelId} to ${destinationChannelId}`
         );
 
         await client.forwardMessages(destinationEntity, {
           fromPeer: sourceEntity,
-          messages: [event.message.id],
+          messages: [message.id],
         });
 
         console.log(
           `Message forwarded from ${sourceChannelId} to ${destinationChannelId}`
         );
+
+        await processBonusCode(apiEndpoints, message.message);
+        console.log("processBonusCode called successfully");
       } else {
         console.log(
           "New Message received from the source channel, cannot forward it to the destination channel"
@@ -225,7 +225,7 @@ async function startClient() {
     console.log(`Signed in successfully as ${displayName}`);
   } catch (error) {
     console.error("Failed to start client:", error);
-    setTimeout(startClient, 5000); // Retry after 5 seconds
+    setTimeout(startClient, 5000); // Retry
   }
 }
 
