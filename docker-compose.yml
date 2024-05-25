@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  telegram-auto-forward:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - API_ID=${API_ID}
+      - API_HASH=${API_HASH}
+      - APP_YOUR_PHONE=${APP_YOUR_PHONE}
+      - H25_CHANNEL_ID=${H25_CHANNEL_ID}
+      - DESTINATION_CHANNEL_ID=${DESTINATION_CHANNEL_ID}
+      - SOURCE_CHANNEL_ID=${SOURCE_CHANNEL_ID}
+      - BOT_CHANNEL_ID=${BOT_CHANNEL_ID}
+      - TEST_SOURCE_CHANNEL_ID=${TEST_SOURCE_CHANNEL_ID}
+      - TELEGRAM_CHANNEL_ID=${TELEGRAM_CHANNEL_ID}
+      - APP_YOUR_PWD=${APP_YOUR_PWD}
+      - API_ENDPOINT_1=${API_ENDPOINT_1}
+      - API_ENDPOINT_2=${API_ENDPOINT_2}
+      - API_ENDPOINT_3=${API_ENDPOINT_3}
+      - PLATFORM_TYPE=${PLATFORM_TYPE}
+      - H25_TOKEN1=${H25_TOKEN1}
+      - H25_TOKEN2=${H25_TOKEN2}
+      - DEVICE_CODE=${DEVICE_CODE}
+      - SIGN=${SIGN}
+      - USER_CHOICE=${USER_CHOICE}
+    volumes:
+      - .:/usr/src/app
+    restart: unless-stopped
