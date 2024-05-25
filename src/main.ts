@@ -204,7 +204,16 @@ async function startClient() {
       phoneNumber: async () => phoneNumber,
       password: async () => userPassword,
       phoneCode: async () => await getLoginCode(),
-      onError: (err: Error) => console.log("Client start error:", err),
+      onError: (err: Error) => {
+        if (err.message.includes("AUTH_KEY_DUPLICATED")) {
+          console.log(
+            "AUTH_KEY_DUPLICATED error detected. Regenerating session..."
+          );
+          regenerateSession();
+        } else {
+          console.log("Client start error:", err);
+        }
+      },
     });
     const me = (await client.getEntity("me")) as Api.User;
     const displayName = [me.firstName, me.lastName].filter(Boolean).join(" ");
@@ -212,6 +221,19 @@ async function startClient() {
   } catch (error) {
     console.error("Failed to start client:", error);
     setTimeout(startClient, 5000); // Retry after 5 seconds
+  }
+}
+
+async function regenerateSession() {
+  try {
+    console.log("Regenerating session...");
+    // Your code to regenerate the session (e.g., delete session file, restart client)
+    // Example: fs.unlinkSync(sessionFilePath);
+    await startClient();
+  } catch (error) {
+    console.error("Failed to regenerate session:", error);
+    // Retry regeneration if failed
+    setTimeout(regenerateSession, 5000); // Retry after 5 seconds
   }
 }
 
