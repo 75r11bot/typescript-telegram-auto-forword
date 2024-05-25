@@ -60,7 +60,11 @@ async function getLoginCode(): Promise<string> {
       const message = event.message;
       console.log("getLoginCode: received message", message);
 
-      if ("chatId" in message && message.chatId === telegramChannelId) {
+      if (
+        message.peerId &&
+        message.peerId.channelId &&
+        message.peerId.channelId.equals(telegramChannelId)
+      ) {
         const match = message.message.match(/Login code: (\d+)/);
         if (match) {
           clearTimeout(timeout); // Clear the timeout
@@ -110,6 +114,7 @@ async function forwardNewMessages() {
       if (
         event.message &&
         event.message.peerId &&
+        event.message.peerId.channelId &&
         event.message.peerId.channelId.equals(sourceEntity.id)
       ) {
         console.log(
@@ -134,19 +139,27 @@ async function forwardNewMessages() {
           "New Message received from the source channel, cannot forward it to the destination channel"
         );
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error handling new message event:", error);
 
-      // Check specific error types
-      if (error instanceof (Api as any).errors.FloodWait) {
+      // Generic error handling
+      if (error.message && error.message.includes("FloodWait")) {
         console.error(
           "FloodWait error: Too many requests in a short period. Try again later."
         );
-      } else if (error instanceof (Api as any).errors.ChatWriteForbidden) {
+      } else if (
+        error.message &&
+        (error.message.includes("ChatWriteForbidden") ||
+          error.message.includes("ChatForbidden"))
+      ) {
         console.error(
           "ChatWriteForbidden error: Bot or user does not have permission to write to the destination channel"
         );
-      } else if (error instanceof (Api as any).errors.MessageNotModified) {
+      } else if (
+        error.message &&
+        (error.message.includes("MessageNotModified") ||
+          error.message.includes("WebPageNotModified"))
+      ) {
         console.error(
           "MessageNotModified error: Message content has not been modified"
         );
@@ -205,13 +218,12 @@ async function startClient() {
       password: async () => userPassword,
       phoneCode: async () => await getLoginCode(),
       onError: (err: Error) => {
+        console.log("Client start error:", err.message);
         if (err.message.includes("AUTH_KEY_DUPLICATED")) {
           console.log(
             "AUTH_KEY_DUPLICATED error detected. Regenerating session..."
           );
           regenerateSession();
-        } else {
-          console.log("Client start error:", err);
         }
       },
     });
@@ -227,8 +239,8 @@ async function startClient() {
 async function regenerateSession() {
   try {
     console.log("Regenerating session...");
-    // Your code to regenerate the session (e.g., delete session file, restart client)
     // Example: fs.unlinkSync(sessionFilePath);
+    await fs.promises.unlink(sessionFilePath);
     await startClient();
   } catch (error) {
     console.error("Failed to regenerate session:", error);
