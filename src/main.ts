@@ -21,6 +21,12 @@ const port = Number(process.env.PORT) || 5000;
 
 const apiEndpoints: string[] = [];
 
+const sessionsDirectory = "./sessions";
+
+if (!fs.existsSync(sessionsDirectory)) {
+  fs.mkdirSync(sessionsDirectory);
+}
+
 const sessionFilePath = "./sessions/session.txt";
 const sessionString = fs.existsSync(sessionFilePath)
   ? fs.readFileSync(sessionFilePath, "utf-8")
@@ -178,6 +184,7 @@ async function pingEndpoints() {
         if (response.data.code === 10000) {
           console.log(`Token ${token} is ready.`);
         } else if (response.data.code === 10140) {
+          const token = process.env.H25_TOKEN2; // Replace YOUR_TOKEN_HERE with the actual token
           console.log(`Token ${token} is expired.`);
         }
       } else {
