@@ -2,7 +2,6 @@
 node_modules/
 
 # Compiled output
-dist/*
 dist/
 
 # Environment variables
