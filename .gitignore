@@ -2,8 +2,8 @@
 node_modules/
 
 # Compiled output
+dist/*
 dist/
-build/
 
 # Environment variables
 .env
