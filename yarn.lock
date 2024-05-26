@@ -229,6 +229,13 @@ asynckit@^0.4.0:
   resolved "https://registry.yarnpkg.com/asynckit/-/asynckit-0.4.0.tgz#c79ed97f7f34cb8f2ba1bc9790bcc366474b4b79"
   integrity sha512-Oei9OH4tRh0YqU3GxhX79dM/mwVgvbZJaSNaRk+bshkj0S5cfHcgYakreBjrHwatXKbz+IoIdYLxrKim2MjW0Q==
 
+axios-retry@^4.3.0:
+  version "4.3.0"
+  resolved "https://registry.yarnpkg.com/axios-retry/-/axios-retry-4.3.0.tgz#43d10bb3675286d116e0a37350ff73aec36ebb80"
+  integrity sha512-vUAQ3bi02Q++b8aAn3fuM03qRKFLZ6BPcqSVsOpgWeww2jrYFpu9SKb9VuctvxrJuRCWM/voDuuRAD7v3A1G5g==
+  dependencies:
+    is-retry-allowed "^2.2.0"
+
 axios@*, axios@^1.7.1:
   version "1.7.1"
   resolved "https://registry.yarnpkg.com/axios/-/axios-1.7.1.tgz#522145622a09dfaf49359837db9649ff245a35b9"
@@ -752,6 +759,11 @@ is-fullwidth-code-point@^3.0.0:
   version "3.0.0"
   resolved "https://registry.yarnpkg.com/is-fullwidth-code-point/-/is-fullwidth-code-point-3.0.0.tgz#f116f8064fe90b3f7844a38997c0b75051269f1d"
   integrity sha512-zymm5+u+sCsSWyD9qNaejV3DFvhCKclKdizYaJUuHA83RLjb7nSuGnddCHGv0hk+KY7BMAlsWeK4Ueg6EV6XQg==
+
+is-retry-allowed@^2.2.0:
+  version "2.2.0"
+  resolved "https://registry.yarnpkg.com/is-retry-allowed/-/is-retry-allowed-2.2.0.tgz#88f34cbd236e043e71b6932d09b0c65fb7b4d71d"
+  integrity sha512-XVm7LOeLpTW4jV19QSH38vkswxoLud8sQ57YwJVTPWdiaI9I8keEhGFpBlslyVsgdQy4Opg8QOLb8YRgsyZiQg==
 
 is-typedarray@^1.0.0:
   version "1.0.0"
