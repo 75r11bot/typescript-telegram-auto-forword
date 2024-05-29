@@ -23,6 +23,9 @@ const reconnectInterval = 5000; // 5 seconds
 const sessionsDirectory = "./sessions";
 const sessionFilePath = `${sessionsDirectory}/session.txt`;
 
+const MAX_RETRIES = 3;
+const RETRY_INTERVAL = 5000; // 5 seconds
+
 if (!fs.existsSync(sessionsDirectory)) {
   fs.mkdirSync(sessionsDirectory);
 }
@@ -172,18 +175,6 @@ async function regenerateSession() {
   }
 }
 
-function startAutoRestart() {
-  console.log("[Started reconnecting]");
-  setTimeout(async () => {
-    try {
-      await startService(); // Try to reconnect
-    } catch (error) {
-      console.error("Failed to reconnect:", error);
-      startAutoRestart(); // Retry reconnecting after interval
-    }
-  }, reconnectInterval);
-}
-
 async function startService() {
   try {
     const axiosInstance = await ApiCall();
@@ -211,11 +202,51 @@ async function startService() {
     await forwardNewMessages();
   } catch (error) {
     console.error("Error in main service:", error);
-    startAutoRestart();
+    startAutoRestart(); // Call the auto-restart function on error
   }
+}
+
+// Auto-restart function
+function startAutoRestart() {
+  console.log("[Started reconnecting]");
+  setTimeout(async () => {
+    try {
+      await restartService(); // Try to restart the service
+    } catch (error) {
+      console.error("Failed to reconnect:", error);
+      startAutoRestart(); // Retry auto-restart after interval
+    }
+  }, reconnectInterval);
 }
 
 startService().catch((error) => {
   console.error("Unexpected error in startService:", error);
   startAutoRestart();
 });
+
+async function restartService() {
+  let retries = 0;
+  let connected = false;
+
+  while (!connected && retries < MAX_RETRIES) {
+    try {
+      // Restart your service here
+      await startService();
+      console.log("Service restarted successfully.");
+      connected = true; // Set connected to true if the service restarts successfully
+    } catch (error) {
+      console.error("Failed to restart service:", error);
+      retries++;
+      await wait(RETRY_INTERVAL); // Wait for a certain interval before retrying
+    }
+  }
+
+  if (!connected) {
+    console.error("Max retries reached. Unable to restart service.");
+    // Optionally, handle the situation where the maximum number of retries is reached
+  }
+}
+
+function wait(ms: number | undefined) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
