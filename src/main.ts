@@ -1,12 +1,11 @@
 import fs from "fs";
 import dotenv from "dotenv";
-import axios from "axios";
-import axiosRetry from "axios-retry";
 import express, { Request, Response } from "express";
 import { TelegramClient } from "telegram";
 import { StringSession } from "telegram/sessions";
 import { NewMessage } from "telegram/events";
 import { Api } from "telegram/tl";
+import { ApiCall } from "./axsios/axsios.config";
 import { processBonusCode, responseResult } from "./services";
 
 dotenv.config();
@@ -21,15 +20,13 @@ const telegramChannelId = Number(process.env.TELEGRAM_CHANNEL_ID);
 const port = Number(process.env.PORT) || 5000;
 const reconnectInterval = 5000; // 5 seconds
 
-const apiEndpoints: string[] = [];
-
 const sessionsDirectory = "./sessions";
+const sessionFilePath = `${sessionsDirectory}/session.txt`;
 
 if (!fs.existsSync(sessionsDirectory)) {
   fs.mkdirSync(sessionsDirectory);
 }
 
-const sessionFilePath = "./sessions/session.txt";
 const sessionString = fs.existsSync(sessionFilePath)
   ? fs.readFileSync(sessionFilePath, "utf-8")
   : "";
@@ -45,19 +42,9 @@ const client = new TelegramClient(
   }
 );
 
-axiosRetry(axios, {
-  retries: 3,
-  retryDelay: (retryCount) => retryCount * 1000, // interval between retries
-  retryCondition: (error) => {
-    if (
-      error.code === "ECONNABORTED" ||
-      (error.response && error.response.status >= 500)
-    ) {
-      return true;
-    }
-    return false;
-  },
-});
+function handleTelegramError(error: Error) {
+  console.error("Telegram error:", error);
+}
 
 async function get_input(prompt: string): Promise<string> {
   return new Promise((resolve) => {
@@ -76,11 +63,7 @@ async function getLoginCode(): Promise<string> {
       const message = event.message;
       console.log("Received message for login code:", message.message);
 
-      if (
-        message.peerId &&
-        message.peerId.channelId &&
-        message.peerId.channelId.equals(telegramChannelId)
-      ) {
+      if (message.peerId?.channelId?.equals(telegramChannelId)) {
         const match = message.message.match(/(\d{5,6})/);
         if (match) {
           clearTimeout(timeout); // Clear the timeout
@@ -122,101 +105,34 @@ async function forwardNewMessages() {
       const sourceEntity = await client.getEntity(sourceChannelId);
       const destinationEntity = await client.getEntity(destinationChannelId);
 
-      console.log("Source Entity:", sourceEntity);
-      console.log("Destination Entity:", destinationEntity);
-
       const message = event.message;
-      const peerId = message.peerId;
-      const channelId = peerId && peerId.channelId;
+      const channelId = message.peerId?.channelId;
+      console.log("process Bonus Code Check Data and Call Requests H25");
 
-      if (channelId && channelId.equals(sourceEntity.id)) {
-        await processBonusCode(apiEndpoints, message.message);
-        console.log("processBonusCode called successfully");
+      const axiosInstance = await ApiCall(); // Initialize axiosInstance here
+      await processBonusCode(axiosInstance, message.message);
 
+      if (channelId?.equals(sourceEntity.id)) {
         console.log(
           `Forwarding message with ID ${message.id} from ${sourceChannelId} to ${destinationChannelId}`
         );
-
         await client.forwardMessages(destinationEntity, {
           fromPeer: sourceEntity,
           messages: [message.id],
         });
-
         console.log(
           `Message forwarded from ${sourceChannelId} to ${destinationChannelId}`
         );
       } else {
         console.log(
-          "New Message received from the source channel, cannot forward it to the destination channel"
+          "New message received from a different source, cannot forward it to the destination channel"
         );
       }
     } catch (error: any) {
       console.error("Error handling new message event:", error);
-
-      if (error.message.includes("FloodWait")) {
-        console.error(
-          "FloodWait error: Too many requests in a short period. Try again later."
-        );
-      } else if (
-        error.message.includes("ChatWriteForbidden") ||
-        error.message.includes("ChatForbidden")
-      ) {
-        console.error(
-          "ChatWriteForbidden error: Bot or user does not have permission to write to the destination channel"
-        );
-      } else if (
-        error.message.includes("MessageNotModified") ||
-        error.message.includes("WebPageNotModified")
-      ) {
-        console.error(
-          "MessageNotModified error: Message content has not been modified"
-        );
-      } else {
-        console.error("Unexpected error:", error);
-      }
+      handleTelegramError(error);
     }
   }, new NewMessage({}));
-}
-
-async function pingEndpoints() {
-  const endpoints = [
-    process.env.API_ENDPOINT_1,
-    // process.env.API_ENDPOINT_2,
-    // process.env.API_ENDPOINT_3,
-  ].filter(Boolean) as string[];
-
-  const siteId = "1451470260579512322";
-  const siteCode = "ybaxcf-4";
-  const platformType = "2";
-  const token = process.env.H25_TOKEN1; // Replace YOUR_TOKEN_HERE with the actual token
-
-  const headers = {
-    token: token,
-    Accept: "application/json, text/plain, */*",
-  };
-
-  for (const endpoint of endpoints) {
-    try {
-      const url = `${endpoint}/v/user/refreshUserFund?siteId=${siteId}&siteCode=${siteCode}&platformType=${platformType}`;
-      const response = await axios.get(url, { headers });
-
-      if (response.status === 200) {
-        apiEndpoints.push(endpoint);
-        if (response.data.code === 10000) {
-          console.log(`Token ${token} is ready.`);
-        } else if (response.data.code === 10140) {
-          const token = process.env.H25_TOKEN2; // Replace YOUR_TOKEN_HERE with the actual token
-          console.log(`Token ${token} is expired.`);
-        }
-      } else {
-        console.error(
-          `Endpoint ${endpoint} is not reachable. Status code: ${response.status}`
-        );
-      }
-    } catch (error: any) {
-      console.error(`Error connecting to ${endpoint}: ${error}`);
-    }
-  }
 }
 
 async function startClient() {
@@ -248,6 +164,7 @@ async function startClient() {
 async function regenerateSession() {
   try {
     console.log("Regenerating session...");
+    fs.unlinkSync(sessionFilePath); // Delete the session file
     await startClient();
   } catch (error) {
     console.error("Failed to regenerate session:", error);
@@ -259,7 +176,7 @@ function startAutoRestart() {
   console.log("[Started reconnecting]");
   setTimeout(async () => {
     try {
-      await startAutoRestart(); // Try to reconnect
+      await startService(); // Try to reconnect
     } catch (error) {
       console.error("Failed to reconnect:", error);
       startAutoRestart(); // Retry reconnecting after interval
@@ -267,21 +184,27 @@ function startAutoRestart() {
   }, reconnectInterval);
 }
 
-// Function to start the main logic of your service
 async function startService() {
   try {
-    await pingEndpoints();
+    const axiosInstance = await ApiCall();
     console.log(`======= Serving on http://0.0.0.0:${port} ======`);
 
     const app = express();
     app.use(express.json());
 
     app.get("/", (req: Request, res: Response) => {
-      res.send("Hello, World!");
+      res.send(`
+        <html>
+          <body>
+            <h1>Bonus Code H25 Response</h1>
+            <pre>${JSON.stringify(responseResult, null, 2)}</pre>
+          </body>
+        </html>
+      `);
     });
 
     app.listen(port, () => {
-      console.log(`Server is running on port ${port}`);
+      console.log(`Server is running at http://0.0.0.0:${port}/`);
     });
 
     await listChats();
@@ -293,6 +216,6 @@ async function startService() {
 }
 
 startService().catch((error) => {
-  console.error("Unexpected error in main:", error);
+  console.error("Unexpected error in startService:", error);
   startAutoRestart();
 });

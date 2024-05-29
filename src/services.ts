@@ -1,14 +1,12 @@
-// services.ts
-import axios, { AxiosResponse } from "axios";
+import axios, { AxiosInstance, AxiosResponse } from "axios";
 import dotenv from "dotenv";
-import moment from "moment"; // Use default import for moment
 
 dotenv.config();
 
 const RETRY_INTERVAL_MS = 50; // Retry interval for specific response codes in milliseconds
 const RATE_LIMIT_INTERVAL_MS = 50; // Interval to wait if rate limit is exceeded in milliseconds
 const MAX_RETRY_COUNT = 2;
-export const responseResult: any[] = []; // Export responseResult array
+export const responseResult: any[] = []; // Declare and export responseResult array
 
 interface FormData {
   platformType: string;
@@ -18,14 +16,9 @@ interface FormData {
   cardNo: string;
 }
 
-interface Headers {
-  [key: string]: string;
-}
-
 async function sendRequest(
   cardNo: string,
-  apiEndpoint: string,
-  headers: Headers,
+  axiosInstance: AxiosInstance,
   retryCount: number = 0
 ): Promise<void> {
   const formData: FormData = {
@@ -37,10 +30,9 @@ async function sendRequest(
   };
 
   try {
-    const response: AxiosResponse = await axios.post(
-      `${apiEndpoint}/cash/v/pay/generatePayCardV2`,
-      formData,
-      { headers }
+    const response: AxiosResponse = await axiosInstance.post(
+      `/cash/v/pay/generatePayCardV2`,
+      formData
     );
     const responseData = response.data;
 
@@ -58,10 +50,6 @@ async function sendRequest(
         break;
       case 10140:
         console.log("Token expired. Updating token and retrying request...");
-        headers["token"] = process.env.H25_TOKEN2 || "";
-        await new Promise((resolve) =>
-          setTimeout(resolve, RATE_LIMIT_INTERVAL_MS)
-        );
         break;
       default:
         responseResult.push(responseData);
@@ -70,11 +58,11 @@ async function sendRequest(
 
     // Retry the request
     if (retryCount < MAX_RETRY_COUNT) {
-      await sendRequest(cardNo, apiEndpoint, headers, retryCount + 1);
+      await sendRequest(cardNo, axiosInstance, retryCount + 1);
     } else {
       console.error("Maximum retry count reached. Aborting request.");
     }
-  } catch (error) {
+  } catch (error: unknown) {
     if (axios.isAxiosError(error) && error.response) {
       console.error("Unexpected response content:", error.response.data);
       console.error("Headers:", error.response.headers);
@@ -89,59 +77,15 @@ async function sendRequest(
 
 async function sendNextRequest(
   dataArray: string[],
-  apiEndpoint: string,
-  headers: Headers
+  axiosInstance: AxiosInstance
 ): Promise<void> {
   for (const cardNo of dataArray) {
-    await sendRequest(cardNo, apiEndpoint, headers);
-  }
-}
-
-async function mockSendRequests(
-  endpoint: string,
-  dataArray: string[]
-): Promise<void> {
-  try {
-    const deviceCode = process.env.DEVICE_CODE || "";
-    const sourceDomain = endpoint.replace("/api", "");
-    const h25Token = process.env.H25_TOKEN1 || "";
-    const sign = process.env.SIGN || "";
-
-    const headers: Headers = {
-      Accept: "application/json, text/plain, */*",
-      "Accept-Encoding": "gzip, deflate, br, zstd",
-      "Accept-Language": "th, en-US;q=0.9, en;q=0.8",
-      "Cache-Control": "no-cache",
-      "Content-Type": "application/x-www-form-urlencoded",
-      Cookie: deviceCode,
-      Endpoint: sourceDomain,
-      Lang: "th-TH",
-      Language: "th-TH",
-      Origin: sourceDomain,
-      Pragma: "no-cache",
-      Referer: `${sourceDomain}/`,
-      "Sec-Ch-Ua":
-        '"Google Chrome";v="123", "Not:A-Brand";v="8", "Chromium";v="123"',
-      "Sec-Ch-Ua-Mobile": "?0",
-      "Sec-Ch-Ua-Platform": '"Windows"',
-      "Sec-Fetch-Dest": "empty",
-      "Sec-Fetch-Mode": "cors",
-      "Sec-Fetch-Site": "same-origin",
-      Token: h25Token,
-      Sign: sign,
-      Timestamp: moment().toISOString(),
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-    };
-
-    await sendNextRequest(dataArray, endpoint, headers);
-  } catch (error) {
-    console.error(`Error: ${error}`);
+    await sendRequest(cardNo, axiosInstance);
   }
 }
 
 async function processBonusCode(
-  apiEndpoints: string[],
+  axiosInstance: AxiosInstance,
   text: string
 ): Promise<void> {
   const codes = parseMessage(text);
@@ -150,14 +94,8 @@ async function processBonusCode(
     (code) => numericalRegex.test(code) && code.length > 10
   );
 
-  if (filteredCodes.length > 0 && apiEndpoints.length > 0) {
-    console.log("bonusCodeArray", filteredCodes);
-
-    try {
-      await mockSendRequests(apiEndpoints[0], filteredCodes);
-    } catch (error) {
-      console.error(`An error occurred: ${error}`);
-    }
+  if (filteredCodes.length > 0) {
+    await sendNextRequest(filteredCodes, axiosInstance);
   } else {
     console.log("No valid bonus codes found:", filteredCodes);
   }
@@ -175,4 +113,4 @@ function parseMessage(message: string): string[] {
   return codes;
 }
 
-export { processBonusCode, sendRequest }; // Export sendRequest if needed elsewhere
+export { processBonusCode, sendRequest }; // Export other functions without redeclaring responseResult
