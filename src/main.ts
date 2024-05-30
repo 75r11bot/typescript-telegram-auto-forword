@@ -105,19 +105,22 @@ async function forwardNewMessages() {
 
   client.addEventHandler(async (event: any) => {
     try {
-      const sourceEntity = await client.getEntity(sourceChannelId);
-      const destinationEntity = await client.getEntity(destinationChannelId);
       const message = event.message;
 
-      console.error("New message received : ", message);
-
+      const sourceEntity = await client.getEntity(sourceChannelId);
+      const destinationEntity = await client.getEntity(destinationChannelId);
       const channelId = message.peerId?.channelId;
-      console.log("process Bonus Code Check Data and Call Requests H25");
+
+      console.log("Processing Bonus Code Check Data and Call Requests H25");
       const axiosInstance = await ApiCall(); // Initialize axiosInstance here
       await processBonusCode(axiosInstance, message.message);
-      console.log("channelCheck : ", channelId?.equals(sourceEntity.id));
+      console.log("New message received: ", message);
+      console.log(
+        "Check message received: ",
+        channelId && channelId.equals(sourceEntity.id)
+      );
 
-      if (channelId?.equals(sourceEntity.id)) {
+      if (channelId && channelId.equals(sourceEntity.id)) {
         console.log(
           `Forwarding message with ID ${message.id} from ${sourceChannelId} to ${destinationChannelId}`
         );
@@ -139,6 +142,10 @@ async function forwardNewMessages() {
     }
   }, new NewMessage({}));
 }
+
+forwardNewMessages().catch((error) => {
+  console.error("Error starting message forwarding:", error);
+});
 
 async function startClient() {
   try {
