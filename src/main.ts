@@ -107,13 +107,15 @@ async function forwardNewMessages() {
     try {
       const sourceEntity = await client.getEntity(sourceChannelId);
       const destinationEntity = await client.getEntity(destinationChannelId);
-
       const message = event.message;
+
+      console.error("New message received : ", message);
+
       const channelId = message.peerId?.channelId;
       console.log("process Bonus Code Check Data and Call Requests H25");
-
       const axiosInstance = await ApiCall(); // Initialize axiosInstance here
       await processBonusCode(axiosInstance, message.message);
+      console.log("channelCheck : ", channelId?.equals(sourceEntity.id));
 
       if (channelId?.equals(sourceEntity.id)) {
         console.log(
@@ -243,10 +245,10 @@ async function restartService() {
 
   if (!connected) {
     console.error("Max retries reached. Unable to restart service.");
-    // Optionally, handle the situation where the maximum number of retries is reached
+    // Optionally, perform additional actions like sending alerts or logging the failure
   }
 }
 
-function wait(ms: number | undefined) {
+function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }

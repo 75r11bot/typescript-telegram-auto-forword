@@ -8,7 +8,6 @@ async function ApiCall(): Promise<AxiosInstance> {
   const platformType = "2";
 
   const endpoints = [
-    // process.env.API_ENDPOINT_1,
     process.env.API_ENDPOINT_2,
     process.env.API_ENDPOINT_3,
     process.env.API_ENDPOINT_4,
@@ -35,7 +34,6 @@ async function ApiCall(): Promise<AxiosInstance> {
       try {
         const deviceCode = process.env.DEVICE_CODE || "";
         const sourceDomain = endpoint.replace("/api", "");
-        const h25Token = process.env.H25_TOKEN1 || "";
         const sign = process.env.SIGN || "";
 
         const headers = {
@@ -58,7 +56,7 @@ async function ApiCall(): Promise<AxiosInstance> {
           "Sec-Fetch-Dest": "empty",
           "Sec-Fetch-Mode": "cors",
           "Sec-Fetch-Site": "same-origin",
-          Token: h25Token,
+          Token: token,
           Sign: sign,
           Timestamp: moment().toISOString(),
           "User-Agent":
@@ -77,7 +75,7 @@ async function ApiCall(): Promise<AxiosInstance> {
           const responseData = response.data;
           if (responseData.code === 10000) {
             console.log(`Token ${token} is ready at endpoint ${endpoint}.`);
-            return axiosInstance;
+            return axiosInstance; // Return the axios instance immediately
           } else if (responseData.code === 10140) {
             console.log(`Token ${token} is expired at endpoint ${endpoint}.`);
           } else {

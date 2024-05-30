@@ -1,13 +1,19 @@
-import axios, { AxiosInstance, AxiosResponse } from "axios";
+// Importing modules
+import axios, { AxiosInstance, AxiosResponse, AxiosError } from "axios";
 import dotenv from "dotenv";
 
+// Configuring dotenv
 dotenv.config();
 
-const RETRY_INTERVAL_MS = 50; // Retry interval for specific response codes in milliseconds
-const RATE_LIMIT_INTERVAL_MS = 50; // Interval to wait if rate limit is exceeded in milliseconds
+// Constants for retrying and rate limit
+const RETRY_INTERVAL_MS = 100; // Retry interval for specific response codes in milliseconds
+const RATE_LIMIT_INTERVAL_MS = 100; // Interval to wait if rate limit is exceeded in milliseconds
 const MAX_RETRY_COUNT = 2;
-export const responseResult: any[] = []; // Declare and export responseResult array
 
+// Declare and export responseResult array
+export const responseResult: any[] = [];
+
+// Interface for form data
 interface FormData {
   platformType: string;
   isCancelDiscount: string;
@@ -16,6 +22,7 @@ interface FormData {
   cardNo: string;
 }
 
+// Function to send request
 async function sendRequest(
   cardNo: string,
   axiosInstance: AxiosInstance,
@@ -24,8 +31,8 @@ async function sendRequest(
   const formData: FormData = {
     platformType: process.env.PLATFORM_TYPE || "1",
     isCancelDiscount: "F",
-    siteId: "1451470260579512322",
-    siteCode: "ybaxcf-4",
+    siteId: process.env.SITE_ID || "1451470260579512322",
+    siteCode: process.env.SITE_CODE || "ybaxcf-4",
     cardNo: cardNo,
   };
 
@@ -41,6 +48,7 @@ async function sendRequest(
     switch (responseData.code) {
       case 9999:
         console.log("Response code is 9999. Retrying request...");
+        await new Promise((resolve) => setTimeout(resolve, RETRY_INTERVAL_MS));
         break;
       case 10003:
         console.log("Rate limit exceeded. Retrying after delay...");
@@ -50,6 +58,7 @@ async function sendRequest(
         break;
       case 10140:
         console.log("Token expired. Updating token and retrying request...");
+        // Handle token update logic here if necessary
         break;
       default:
         responseResult.push(responseData);
@@ -66,6 +75,11 @@ async function sendRequest(
     if (axios.isAxiosError(error) && error.response) {
       console.error("Unexpected response content:", error.response.data);
       console.error("Headers:", error.response.headers);
+      // Retry logic for server errors
+      if (error.response.status >= 500 && retryCount < MAX_RETRY_COUNT) {
+        await new Promise((resolve) => setTimeout(resolve, RETRY_INTERVAL_MS));
+        await sendRequest(cardNo, axiosInstance, retryCount + 1);
+      }
     } else {
       console.error(
         "Error sending request to API:",
@@ -75,6 +89,7 @@ async function sendRequest(
   }
 }
 
+// Function to send next request
 async function sendNextRequest(
   dataArray: string[],
   axiosInstance: AxiosInstance
@@ -84,6 +99,7 @@ async function sendNextRequest(
   }
 }
 
+// Function to process bonus code
 async function processBonusCode(
   axiosInstance: AxiosInstance,
   text: string
@@ -101,6 +117,7 @@ async function processBonusCode(
   }
 }
 
+// Function to parse message
 function parseMessage(message: string): string[] {
   const lines = message.trim().split("\n");
   const codes: string[] = [];
@@ -113,4 +130,5 @@ function parseMessage(message: string): string[] {
   return codes;
 }
 
-export { processBonusCode, sendRequest }; // Export other functions without redeclaring responseResult
+// Exporting functions without redeclaring responseResult
+export { processBonusCode, sendRequest };
