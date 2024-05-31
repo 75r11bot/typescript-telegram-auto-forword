@@ -29,7 +29,7 @@ async function sendRequest(
   retryCount: number = 0
 ): Promise<void> {
   const formData: FormData = {
-    platformType: process.env.PLATFORM_TYPE || "1",
+    platformType: process.env.PLATFORM_TYPE || "2",
     isCancelDiscount: "F",
     siteId: process.env.SITE_ID || "1451470260579512322",
     siteCode: process.env.SITE_CODE || "ybaxcf-4",
