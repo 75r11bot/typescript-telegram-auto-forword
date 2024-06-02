@@ -42,7 +42,7 @@ async function initializeClient() {
       apiId,
       apiHash,
       {
-        connectionRetries: 0, // Disable internal retries
+        connectionRetries: 5, // Disable internal retries
         timeout: 86400000, // 24 hours
         useWSS: true,
       }
@@ -100,63 +100,76 @@ async function getLoginCode(): Promise<string> {
 }
 
 async function listChats() {
-  await startClient();
+  try {
+    console.log("Calling listChats..."); // เพิ่มบรรทัดนี้
+    console.log("Listing chats...");
+    await startClient();
 
-  const dialogs = await client.getDialogs();
-  for (const dialog of dialogs) {
-    console.log(`Chat ID: ${dialog.id}, Title: ${dialog.title}`);
+    const dialogs = await client.getDialogs();
+    for (const dialog of dialogs) {
+      console.log(`Chat ID: ${dialog.id}, Title: ${dialog.title}`);
+    }
+    console.log("listChats completed"); // เพิ่มบรรทัดนี้
+  } catch (error) {
+    console.error("Error listing chats:", error);
   }
 }
 
 async function forwardNewMessages() {
-  console.log("Process subscribed message to auto forward successfully");
-  await startClient();
+  try {
+    console.log("Calling forwardNewMessages..."); // เพิ่มบรรทัดนี้
+    console.log("Setting up message forwarding...");
+    await startClient();
 
-  const session = client.session.save();
-  if (typeof session === "string") {
-    await fs.promises.writeFile(sessionFilePath, session);
-  } else {
-    console.error("Session is not a string:", session);
-  }
-
-  client.addEventHandler(async (event: any) => {
-    try {
-      const message = event.message;
-
-      const sourceEntity = await client.getEntity(sourceChannelId);
-      const destinationEntity = await client.getEntity(destinationChannelId);
-      const channelId = message.peerId?.channelId;
-
-      console.log("Processing Bonus Code Check Data and Call Requests H25");
-      const axiosInstance = await ApiCall(); // Initialize axiosInstance here
-      await processBonusCode(axiosInstance, message.message);
-      console.log("New message received: ", message);
-      console.log(
-        "Check message received: ",
-        channelId && channelId.equals(sourceEntity.id)
-      );
-
-      if (channelId && channelId.equals(sourceEntity.id)) {
-        console.log(
-          `Forwarding message with ID ${message.id} from ${sourceChannelId} to ${destinationChannelId}`
-        );
-        await client.forwardMessages(destinationEntity, {
-          fromPeer: sourceEntity,
-          messages: [message.id],
-        });
-        console.log(
-          `Message forwarded from ${sourceChannelId} to ${destinationChannelId}`
-        );
-      } else {
-        console.log(
-          "New message received from a different source, cannot forward it to the destination channel"
-        );
-      }
-    } catch (error: any) {
-      console.error("Error handling new message event:", error);
-      handleTelegramError(error);
+    const session = client.session.save();
+    if (typeof session === "string") {
+      await fs.promises.writeFile(sessionFilePath, session);
+    } else {
+      console.error("Session is not a string:", session);
     }
-  }, new NewMessage({}));
+
+    client.addEventHandler(async (event: any) => {
+      try {
+        const message = event.message;
+
+        const sourceEntity = await client.getEntity(sourceChannelId);
+        const destinationEntity = await client.getEntity(destinationChannelId);
+        const channelId = message.peerId?.channelId;
+
+        console.log("Processing Bonus Code Check Data and Call Requests H25");
+        const axiosInstance = await ApiCall(); // Initialize axiosInstance here
+        await processBonusCode(axiosInstance, message.message);
+        console.log("New message received: ", message);
+        console.log(
+          "Check message received: ",
+          channelId && channelId.equals(sourceEntity.id)
+        );
+
+        if (channelId && channelId.equals(sourceEntity.id)) {
+          console.log(
+            `Forwarding message with ID ${message.id} from ${sourceChannelId} to ${destinationChannelId}`
+          );
+          await client.forwardMessages(destinationEntity, {
+            fromPeer: sourceEntity,
+            messages: [message.id],
+          });
+          console.log(
+            `Message forwarded from ${sourceChannelId} to ${destinationChannelId}`
+          );
+        } else {
+          console.log(
+            "New message received from a different source, cannot forward it to the destination channel"
+          );
+        }
+      } catch (error: any) {
+        console.error("Error handling new message event:", error);
+        handleTelegramError(error);
+      }
+    }, new NewMessage({}));
+    console.log("forwardNewMessages completed"); // เพิ่มบรรทัดนี้
+  } catch (error) {
+    console.error("Error setting up message forwarding:", error);
+  }
 }
 
 async function startClient() {
