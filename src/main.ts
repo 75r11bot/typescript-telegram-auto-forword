@@ -5,7 +5,7 @@ import { TelegramClient } from "telegram";
 import { StringSession } from "telegram/sessions";
 import { NewMessage } from "telegram/events";
 import { Api } from "telegram/tl";
-import { ApiCall } from "./axsios/axsios.config";
+import { ApiCall } from "./axios/axios.config";
 import { processBonusCode, responseResult } from "./services";
 
 dotenv.config();
@@ -18,13 +18,12 @@ const phoneNumber = process.env.APP_YOUR_PHONE || "";
 const userPassword = process.env.APP_YOUR_PWD || "";
 const telegramChannelId = Number(process.env.TELEGRAM_CHANNEL_ID);
 const port = Number(process.env.PORT) || 5000;
-const reconnectInterval = 5000; // 5 seconds
-
 const sessionsDirectory = "./sessions";
 const sessionFilePath = `${sessionsDirectory}/session.txt`;
 
-const MAX_RETRIES = 3;
-const RETRY_INTERVAL = 5000; // 5 seconds
+const MAX_RETRIES = 5;
+const INITIAL_RETRY_INTERVAL = 5000; // 5 seconds
+let retryInterval = INITIAL_RETRY_INTERVAL;
 
 if (!fs.existsSync(sessionsDirectory)) {
   fs.mkdirSync(sessionsDirectory);
@@ -34,22 +33,39 @@ const sessionString = fs.existsSync(sessionFilePath)
   ? fs.readFileSync(sessionFilePath, "utf-8")
   : "";
 
-const client = new TelegramClient(
-  new StringSession(sessionString),
-  apiId,
-  apiHash,
-  {
-    connectionRetries: 10,
-    timeout: 86400000, // 24 hours
-    useWSS: true,
-  }
-);
+let client: TelegramClient;
 
-function handleTelegramError(error: Error) {
-  console.error("Telegram error:", error);
+async function initializeClient() {
+  try {
+    client = new TelegramClient(
+      new StringSession(sessionString),
+      apiId,
+      apiHash,
+      {
+        connectionRetries: 0, // Disable internal retries
+        timeout: 86400000, // 24 hours
+        useWSS: true,
+      }
+    );
+    console.log("Telegram client initialized successfully.");
+  } catch (error: any) {
+    console.error("Failed to initialize Telegram client:", error.message);
+    setTimeout(initializeClient, 5000); // Retry after 5 seconds
+  }
 }
 
-async function get_input(prompt: string): Promise<string> {
+async function handleTelegramError(error: Error) {
+  console.error("Telegram error:", error);
+  if (error.message.includes("ECONNREFUSED")) {
+    console.log("Connection refused, retrying...");
+    retryConnection();
+  } else {
+    console.log("Unhandled error, restarting client...");
+    setTimeout(startClient, retryInterval);
+  }
+}
+
+async function getInput(prompt: string): Promise<string> {
   return new Promise((resolve) => {
     process.stdout.write(prompt);
     process.stdin.once("data", (data) => resolve(data.toString().trim()));
@@ -57,7 +73,7 @@ async function get_input(prompt: string): Promise<string> {
 }
 
 async function getLoginCode(): Promise<string> {
-  return new Promise<string>(async (resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     const timeout = setTimeout(() => {
       reject(new Error("Timeout"));
     }, 60000); // 60 seconds
@@ -79,7 +95,7 @@ async function getLoginCode(): Promise<string> {
     client.addEventHandler(handler, new NewMessage({}));
   }).catch(async (error) => {
     console.error("Error getting login code:", error);
-    return await get_input("Enter the code: ");
+    return await getInput("Enter the code: ");
   });
 }
 
@@ -143,12 +159,9 @@ async function forwardNewMessages() {
   }, new NewMessage({}));
 }
 
-forwardNewMessages().catch((error) => {
-  console.error("Error starting message forwarding:", error);
-});
-
 async function startClient() {
   try {
+    await initializeClient();
     await client.start({
       phoneNumber: async () => phoneNumber,
       password: async () => userPassword,
@@ -169,7 +182,7 @@ async function startClient() {
     console.log(`Signed in successfully as ${displayName}`);
   } catch (error) {
     console.error("Failed to start client:", error);
-    setTimeout(startClient, reconnectInterval); // Retry after interval
+    setTimeout(startClient, retryInterval); // Retry after interval
   }
 }
 
@@ -177,10 +190,36 @@ async function regenerateSession() {
   try {
     console.log("Regenerating session...");
     fs.unlinkSync(sessionFilePath); // Delete the session file
+    await initializeClient();
     await startClient();
   } catch (error) {
     console.error("Failed to regenerate session:", error);
-    setTimeout(regenerateSession, reconnectInterval); // Retry after interval
+    setTimeout(regenerateSession, retryInterval); // Retry after interval
+  }
+}
+
+async function retryConnection() {
+  let retries = 0;
+  let connected = false;
+
+  while (!connected && retries < MAX_RETRIES) {
+    try {
+      await startClient();
+      console.log("Service restarted successfully.");
+      connected = true;
+    } catch (error) {
+      console.error(`Retry attempt ${retries + 1} failed:`, error);
+      retries++;
+      await wait(retryInterval);
+      retryInterval *= 2; // Exponential backoff
+    }
+  }
+
+  if (!connected) {
+    console.error("Max retries reached. Unable to restart service. Exiting...");
+    process.exit(1); // Exit process to trigger Docker restart
+  } else {
+    retryInterval = INITIAL_RETRY_INTERVAL; // Reset the retry interval
   }
 }
 
@@ -211,51 +250,16 @@ async function startService() {
     await forwardNewMessages();
   } catch (error) {
     console.error("Error in main service:", error);
-    startAutoRestart(); // Call the auto-restart function on error
+    retryConnection();
   }
 }
 
-// Auto-restart function
-function startAutoRestart() {
-  console.log("[Started reconnecting]");
-  setTimeout(async () => {
-    try {
-      await restartService(); // Try to restart the service
-    } catch (error) {
-      console.error("Failed to reconnect:", error);
-      startAutoRestart(); // Retry auto-restart after interval
-    }
-  }, reconnectInterval);
-}
-
+// Entry point of the application
 startService().catch((error) => {
   console.error("Unexpected error in startService:", error);
-  startAutoRestart();
+  retryConnection();
 });
 
-async function restartService() {
-  let retries = 0;
-  let connected = false;
-
-  while (!connected && retries < MAX_RETRIES) {
-    try {
-      // Restart your service here
-      await startService();
-      console.log("Service restarted successfully.");
-      connected = true; // Set connected to true if the service restarts successfully
-    } catch (error) {
-      console.error("Failed to restart service:", error);
-      retries++;
-      await wait(RETRY_INTERVAL); // Wait for a certain interval before retrying
-    }
-  }
-
-  if (!connected) {
-    console.error("Max retries reached. Unable to restart service.");
-    // Optionally, perform additional actions like sending alerts or logging the failure
-  }
-}
-
-function wait(ms: number): Promise<void> {
+async function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
