@@ -139,7 +139,7 @@ async function forwardNewMessages() {
         console.log("Processing Bonus Code Check Data and Call Requests H25");
         const axiosInstance = await ApiCall(); // Initialize axiosInstance here
         await processBonusCode(axiosInstance, message.message);
-        console.log("New message received: ", message);
+        console.log("New message received: ", message.message);
         console.log(
           "Check message received: ",
           channelId && channelId.equals(sourceEntity.id)
@@ -170,6 +170,7 @@ async function forwardNewMessages() {
   } catch (error) {
     console.error("Error setting up message forwarding:", error);
   }
+  await startClient();
 }
 
 async function startClient() {
