@@ -156,6 +156,7 @@ async function forwardNewMessages() {
           console.log(
             `Message forwarded from ${sourceChannelId} to ${destinationChannelId}`
           );
+          console.log("forwardNewMessages completed");
         } else {
           console.log(
             "New message received from a different source, cannot forward it to the destination channel"
@@ -166,7 +167,6 @@ async function forwardNewMessages() {
         handleTelegramError(error);
       }
     }, new NewMessage({}));
-    console.log("forwardNewMessages completed");
   } catch (error) {
     console.error("Error setting up message forwarding:", error);
   }
@@ -212,6 +212,22 @@ async function regenerateSession() {
   }
 }
 
+async function restartDockerContainer() {
+  console.log("Restarting Docker container...");
+  try {
+    // Use child_process module to execute shell commands
+    const { execSync } = require("child_process");
+
+    // Replace 'your_container_name' with the name of your Docker container
+    execSync("docker restart telegram-auto-forword-telegram-auto-forward-1");
+
+    console.log("Docker container restarted successfully.");
+  } catch (error) {
+    console.error("Error restarting Docker container:", error);
+    // Handle the error appropriately, such as logging or retrying
+  }
+}
+
 async function retryConnection() {
   let retries = 0;
   let connected = false;
@@ -231,14 +247,7 @@ async function retryConnection() {
 
   if (!connected) {
     console.error("Max retries reached. Unable to restart service. Exiting...");
-    // Check if the program is running within a Docker container
-    const isDocker = fs.existsSync("/.dockerenv");
-    if (isDocker) {
-      // If running inside a Docker container, restart the container
-      restartDockerContainer();
-    } else {
-      process.exit(1); // Exit process to trigger Docker restart
-    }
+    restartDockerContainer(); // Restart Docker container if max retries reached
   } else {
     retryInterval = INITIAL_RETRY_INTERVAL; // Reset the retry interval
   }
@@ -283,20 +292,4 @@ startService().catch((error) => {
 
 async function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function restartDockerContainer() {
-  console.log("Restarting Docker container...");
-  try {
-    // Use child_process module to execute shell commands
-    const { execSync } = require("child_process");
-
-    // Replace 'your_container_name' with the name of your Docker container
-    execSync("docker restart telegram-auto-forword-telegram-auto-forward-1");
-
-    console.log("Docker container restarted successfully.");
-  } catch (error) {
-    console.error("Error restarting Docker container:", error);
-    // Handle the error appropriately, such as logging or retrying
-  }
 }
