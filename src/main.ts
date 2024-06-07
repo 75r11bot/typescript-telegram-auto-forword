@@ -12,11 +12,12 @@ dotenv.config();
 
 const apiId = Number(process.env.API_ID);
 const apiHash = process.env.API_HASH || "";
-const sourceChannelId = Number(process.env.SOURCE_CHANNEL_ID);
+const sourceChannelIds = process.env.SOURCE_CHANNEL_IDS
+  ? process.env.SOURCE_CHANNEL_IDS.split(",").map((id) => Number(id.trim()))
+  : [];
 const destinationChannelId = Number(process.env.DESTINATION_CHANNEL_ID);
 const phoneNumber = process.env.APP_YOUR_PHONE || "";
 const userPassword = process.env.APP_YOUR_PWD || "";
-const telegramChannelId = Number(process.env.TELEGRAM_CHANNEL_ID);
 const port = Number(process.env.PORT) || 5000;
 const sessionsDirectory = "./sessions";
 const sessionFilePath = `${sessionsDirectory}/session.txt`;
@@ -56,8 +57,11 @@ async function initializeClient() {
 
 async function handleTelegramError(error: Error) {
   console.error("Telegram error:", error);
-  if (error.message.includes("ECONNREFUSED")) {
-    console.log("Connection refused, retrying...");
+  if (
+    error.message.includes("ECONNREFUSED") ||
+    error.message.includes("TIMEOUT")
+  ) {
+    console.log("Connection issue, retrying...");
     retryConnection();
   } else {
     console.log("Unhandled error, restarting client...");
@@ -69,33 +73,6 @@ async function getInput(prompt: string): Promise<string> {
   return new Promise((resolve) => {
     process.stdout.write(prompt);
     process.stdin.once("data", (data) => resolve(data.toString().trim()));
-  });
-}
-
-async function getLoginCode(): Promise<string> {
-  return new Promise<string>((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      reject(new Error("Timeout"));
-    }, 60000); // 60 seconds
-
-    const handler = async (event: any) => {
-      const message = event.message;
-      console.log("Received message for login code:", message.message);
-
-      if (message.peerId?.channelId?.equals(telegramChannelId)) {
-        const match = message.message.match(/(\d{5,6})/);
-        if (match) {
-          clearTimeout(timeout); // Clear the timeout
-          client.removeEventHandler(handler, new NewMessage({})); // Remove the handler
-          resolve(match[1]);
-        }
-      }
-    };
-
-    client.addEventHandler(handler, new NewMessage({}));
-  }).catch(async (error) => {
-    console.error("Error getting login code:", error);
-    return await getInput("Enter the code: ");
   });
 }
 
@@ -131,9 +108,6 @@ async function forwardNewMessages() {
     client.addEventHandler(async (event: any) => {
       try {
         const message = event.message;
-
-        const sourceEntity = await client.getEntity(sourceChannelId);
-        const destinationEntity = await client.getEntity(destinationChannelId);
         const channelId = message.peerId?.channelId;
 
         console.log("Processing Bonus Code Check Data and Call Requests H25");
@@ -142,21 +116,11 @@ async function forwardNewMessages() {
         console.log("New message received: ", message.message);
         console.log(
           "Check message received: ",
-          channelId && channelId.equals(sourceEntity.id)
+          channelId && sourceChannelIds.includes(channelId)
         );
 
-        if (channelId && channelId.equals(sourceEntity.id)) {
-          console.log(
-            `Forwarding message with ID ${message.id} from ${sourceChannelId} to ${destinationChannelId}`
-          );
-          await client.forwardMessages(destinationEntity, {
-            fromPeer: sourceEntity,
-            messages: [message.id],
-          });
-          console.log(
-            `Message forwarded from ${sourceChannelId} to ${destinationChannelId}`
-          );
-          console.log("forwardNewMessages completed");
+        if (channelId && sourceChannelIds.includes(channelId)) {
+          await forwardMessage(message, channelId);
         } else {
           console.log(
             "New message received from a different source, cannot forward it to the destination channel"
@@ -173,13 +137,27 @@ async function forwardNewMessages() {
   await startClient();
 }
 
+async function forwardMessage(message: any, channelId: number) {
+  const sourceEntity = await client.getEntity(channelId);
+  const destinationEntity = await client.getEntity(destinationChannelId);
+
+  console.log(
+    `Forwarding message with ID ${message.id} from ${channelId} to ${destinationChannelId}`
+  );
+  await client.forwardMessages(destinationEntity, {
+    fromPeer: sourceEntity,
+    messages: [message.id],
+  });
+  console.log(`Message forwarded from ${channelId} to ${destinationChannelId}`);
+}
+
 async function startClient() {
   try {
     await initializeClient();
     await client.start({
       phoneNumber: async () => phoneNumber,
       password: async () => userPassword,
-      phoneCode: async () => await getLoginCode(),
+      phoneCode: async () => await getInput("Enter the code: "),
       onError: (err: Error) => {
         if (err.message.includes("AUTH_KEY_DUPLICATED")) {
           console.log(
@@ -215,12 +193,8 @@ async function regenerateSession() {
 async function restartDockerContainer() {
   console.log("Restarting Docker container...");
   try {
-    // Use child_process module to execute shell commands
     const { execSync } = require("child_process");
-
-    // Replace 'your_container_name' with the name of your Docker container
     execSync("docker restart telegram-auto-forword-telegram-auto-forward-1");
-
     console.log("Docker container restarted successfully.");
   } catch (error) {
     console.error("Error restarting Docker container:", error);
@@ -247,7 +221,12 @@ async function retryConnection() {
 
   if (!connected) {
     console.error("Max retries reached. Unable to restart service. Exiting...");
-    restartDockerContainer(); // Restart Docker container if max retries reached
+    try {
+      restartDockerContainer(); // Restart Docker container if max retries reached
+    } catch (error) {
+      console.error("Error restarting Docker container:", error);
+      // Handle the error appropriately
+    }
   } else {
     retryInterval = INITIAL_RETRY_INTERVAL; // Reset the retry interval
   }
@@ -280,7 +259,7 @@ async function startService() {
     await forwardNewMessages();
   } catch (error) {
     console.error("Error in main service:", error);
-    retryConnection();
+    retryConnection(); // Retry connection after Docker container restart
   }
 }
 

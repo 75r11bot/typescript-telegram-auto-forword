@@ -13,6 +13,9 @@ RUN yarn install
 # Copy the rest of the application files to the working directory
 COPY . .
 
+# Copy the sessions directory to the working directory
+COPY sessions ./sessions
+
 # Build the application
 RUN yarn run build
 
