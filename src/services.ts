@@ -1,4 +1,3 @@
-// Importing modules
 import axios, { AxiosInstance, AxiosResponse, AxiosError } from "axios";
 import dotenv from "dotenv";
 import { ApiCall } from "./axios/axios.config";
@@ -49,14 +48,13 @@ async function sendRequest(
     switch (responseData.code) {
       case 9999:
         console.log("Response code is 9999. Retrying request...");
-        await new Promise((resolve) => setTimeout(resolve, RETRY_INTERVAL_MS));
+        await wait(RETRY_INTERVAL_MS);
         break;
       case 10003:
         console.log("Rate limit exceeded. Releasing and renewing IP...");
-        // Perform network operations to release and renew IP address
         await executeNetworkCommands();
         console.log("IP released and renewed. Retrying request...");
-        await new Promise((resolve) => setTimeout(resolve, RETRY_INTERVAL_MS));
+        await wait(RETRY_INTERVAL_MS);
         break;
       case 10140:
         console.log("Token expired. Setting up new axiosInstance...");
@@ -68,28 +66,41 @@ async function sendRequest(
         return; // Exit the function on success
     }
 
-    // Retry the request
     if (retryCount < MAX_RETRY_COUNT) {
       await sendRequest(cardNo, axiosInstance, retryCount + 1);
     } else {
       console.error("Maximum retry count reached. Aborting request.");
     }
   } catch (error: unknown) {
-    if (axios.isAxiosError(error) && error.response) {
-      console.error("Unexpected response content:", error.response.data);
-      console.error("Headers:", error.response.headers);
-      // Retry logic for server errors
-      if (error.response.status >= 500 && retryCount < MAX_RETRY_COUNT) {
-        await new Promise((resolve) => setTimeout(resolve, RETRY_INTERVAL_MS));
-        await sendRequest(cardNo, axiosInstance, retryCount + 1);
-      }
-    } else {
-      console.error(
-        "Error sending request to API:",
-        (error as any).stack || (error as any).message
-      );
-    }
+    handleError(error, cardNo, axiosInstance, retryCount);
   }
+}
+
+// Function to handle errors
+async function handleError(
+  error: unknown,
+  cardNo: string,
+  axiosInstance: AxiosInstance,
+  retryCount: number
+): Promise<void> {
+  if (axios.isAxiosError(error) && error.response) {
+    console.error("Unexpected response content:", error.response.data);
+    console.error("Headers:", error.response.headers);
+    if (error.response.status >= 500 && retryCount < MAX_RETRY_COUNT) {
+      await wait(RETRY_INTERVAL_MS);
+      await sendRequest(cardNo, axiosInstance, retryCount + 1);
+    }
+  } else {
+    console.error(
+      "Error sending request to API:",
+      (error as any).stack || (error as any).message
+    );
+  }
+}
+
+// Function to wait for a given time
+async function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // Function to send next request
@@ -134,9 +145,8 @@ function parseMessage(message: string): string[] {
   return codes;
 }
 
+// Function to execute network commands
 async function executeNetworkCommands(): Promise<void> {
-  // Execute network commands to release and renew IP address
-  // This can be done using child process or any suitable library
   try {
     const { execSync } = require("child_process");
     execSync("netsh int ip reset");
@@ -147,5 +157,6 @@ async function executeNetworkCommands(): Promise<void> {
     throw error;
   }
 }
+
 // Exporting functions without redeclaring responseResult
 export { processBonusCode, sendRequest, executeNetworkCommands };
