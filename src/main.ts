@@ -80,16 +80,7 @@ async function listChats() {
 
     for (const dialog of dialogs) {
       console.log(`Chat ID: ${dialog.id}, Title: ${dialog.title}`);
-      // if (
-      //   dialog.title === "H25 THAILAND 🇹🇭" ||
-      //   dialog.title === "TestForwardMessage"
-      // ) {
-      //   sourceChannelIds.push(dialog.id);
-      // }
     }
-    console.log("listChats completed");
-
-    // Once the sourceChannelIds are populated, call forwardNewMessages
   } catch (error) {
     console.error("Error listing chats:", error);
   }
@@ -98,7 +89,6 @@ async function listChats() {
 async function forwardNewMessages() {
   try {
     console.log("Calling forwardNewMessages...");
-
     client.addEventHandler(async (event: any) => {
       try {
         const message = event.message;
@@ -106,13 +96,6 @@ async function forwardNewMessages() {
         const channelIdAsString = channelId
           ? `-100${channelId.toString()}`
           : null;
-
-        console.log("New message received: ", message.message);
-        console.log("Message received from channelId: ", channelIdAsString);
-
-        // console.log("Processing Bonus Codes Call Requests to H25");
-        // const axiosInstance = await ApiCall();
-        // await processBonusCode(axiosInstance, message.message);
 
         if (!channelIdAsString) {
           console.log("channelIdAsString is null, skipping this message.");
@@ -127,15 +110,14 @@ async function forwardNewMessages() {
           return;
         }
 
+        console.log("Processing Bonus Codes Call Requests to H25");
+        const axiosInstance = await ApiCall();
+        await processBonusCode(axiosInstance, message.message);
         // Forward the message to the destination channel
         console.log(
           "Processing Forward the message to the destination channel"
         );
         await forwardMessage(message, channelIdAsString);
-
-        console.log("Processing Bonus Codes Call Requests to H25");
-        const axiosInstance = await ApiCall();
-        await processBonusCode(axiosInstance, message.message);
       } catch (error: any) {
         console.error("Error handling new message event:", error);
         handleTelegramError(error);
@@ -150,9 +132,6 @@ async function forwardMessage(message: any, channelId: string) {
   const sourceEntity = await client.getEntity(channelId);
   const destinationEntity = await client.getEntity(destinationChannelId);
 
-  console.log(
-    `Forwarding message with ID ${message.id} from ${channelId} to ${destinationChannelId}`
-  );
   await client.forwardMessages(destinationEntity, {
     fromPeer: sourceEntity,
     messages: [message.id],
@@ -203,7 +182,6 @@ async function regenerateSession() {
 }
 
 async function restartDockerContainer() {
-  console.log("Restarting Docker container...");
   try {
     const { execSync } = require("child_process");
     execSync("docker restart telegram-auto-forward-1");

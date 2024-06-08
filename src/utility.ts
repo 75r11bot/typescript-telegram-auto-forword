@@ -1,0 +1,109 @@
+import { Page, chromium } from "playwright";
+
+async function loginAndCaptureResponse(
+  page: Page,
+  user: string,
+  password: string
+): Promise<string | null> {
+  let token: string | null = null;
+
+  try {
+    // Navigate to the login page
+    await page.goto("https://75rapp.com/client.html");
+
+    // Interception for API response
+    page.on("response", async (response) => {
+      // Check if the response is from the login API
+      if (response.url().includes("/api/v/user/newLoginv2")) {
+        const responseBody = await response.text();
+        console.log("Response from login API:", responseBody);
+
+        const jsonResponse = JSON.parse(responseBody);
+        if (
+          jsonResponse.code === 10000 &&
+          jsonResponse.data &&
+          jsonResponse.data.token
+        ) {
+          token = jsonResponse.data.token;
+        }
+      }
+    });
+
+    // Your existing login actions
+    await page
+      .frameLocator("#iframe")
+      .getByRole("button", { name: "" })
+      .click();
+    await page.frameLocator("#iframe").getByText("×").click();
+    await page
+      .frameLocator("#iframe")
+      .locator("span")
+      .filter({ hasText: "ลงชื่อเข้าใช้" })
+      .click();
+    await page
+      .frameLocator("#iframe")
+      .getByPlaceholder("ชื่อผู้ใช้ (ตัวอักษรคำนึงถึงตัวพิมพ์เล็กและใหญ่)")
+      .fill(user);
+    await page
+      .frameLocator("#iframe")
+      .getByRole("textbox", {
+        name: "รหัสผ่าน (ตัวอักษรคำนึงถึงตัวพิมพ์เล็กและใหญ่)",
+      })
+      .click();
+    await page
+      .frameLocator("#iframe")
+      .getByRole("textbox", {
+        name: "รหัสผ่าน (ตัวอักษรคำนึงถึงตัวพิมพ์เล็กและใหญ่)",
+      })
+      .fill(password);
+    await page
+      .frameLocator("#iframe")
+      .getByRole("button", { name: "ลงชื่อเข้าใช้", exact: true })
+      .click();
+
+    // Wait for the iframe to load
+    const frame = page.frame({ name: "iframe" });
+    if (frame) {
+      await frame.waitForLoadState("domcontentloaded");
+
+      // Close any popups within the iframe
+      // await frame.getByText("×").click({ timeout: 60000 }); // Increase the timeout
+      await frame.waitForTimeout(3000); // Wait for 5 seconds
+    } else {
+      console.error("Frame not found");
+    }
+  } catch (error) {
+    console.error("Error occurred during login:", error);
+  }
+
+  return token;
+}
+
+async function getH25Token(user: string, password: string) {
+  let token: string | null = null;
+
+  try {
+    const browser = await chromium.launch({
+      headless: true, // Run in headless mode
+    });
+    const context = await browser.newContext();
+    const page = await context.newPage();
+
+    token = await loginAndCaptureResponse(page, user, password);
+
+    await context.close();
+    await browser.close();
+  } catch (error) {
+    console.error("Error occurred during browser operation:", error);
+  }
+
+  if (token) {
+    console.log("Extracted token:", token);
+  } else {
+    console.log("Token not found.");
+  }
+
+  return token;
+}
+
+export { getH25Token };

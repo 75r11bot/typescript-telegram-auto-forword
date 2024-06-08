@@ -1,6 +1,7 @@
 // Importing modules
 import axios, { AxiosInstance, AxiosResponse, AxiosError } from "axios";
 import dotenv from "dotenv";
+import { ApiCall } from "./axios/axios.config";
 
 // Configuring dotenv
 dotenv.config();
@@ -51,14 +52,16 @@ async function sendRequest(
         await new Promise((resolve) => setTimeout(resolve, RETRY_INTERVAL_MS));
         break;
       case 10003:
-        console.log("Rate limit exceeded. Retrying after delay...");
-        await new Promise((resolve) =>
-          setTimeout(resolve, RATE_LIMIT_INTERVAL_MS)
-        );
+        console.log("Rate limit exceeded. Releasing and renewing IP...");
+        // Perform network operations to release and renew IP address
+        await executeNetworkCommands();
+        console.log("IP released and renewed. Retrying request...");
+        await new Promise((resolve) => setTimeout(resolve, RETRY_INTERVAL_MS));
         break;
       case 10140:
-        console.log("Token expired. Updating token and retrying request...");
-        // Handle token update logic here if necessary
+        console.log("Token expired. Setting up new axiosInstance...");
+        axiosInstance = await ApiCall();
+        await sendRequest(cardNo, axiosInstance, retryCount);
         break;
       default:
         responseResult.push(responseData);
@@ -109,6 +112,7 @@ async function processBonusCode(
   const filteredCodes = codes.filter(
     (code) => numericalRegex.test(code) && code.length > 10
   );
+  console.log("Bonus Codes:", filteredCodes);
 
   if (filteredCodes.length > 0) {
     await sendNextRequest(filteredCodes, axiosInstance);
@@ -130,5 +134,18 @@ function parseMessage(message: string): string[] {
   return codes;
 }
 
+async function executeNetworkCommands(): Promise<void> {
+  // Execute network commands to release and renew IP address
+  // This can be done using child process or any suitable library
+  try {
+    const { execSync } = require("child_process");
+    execSync("netsh int ip reset");
+    execSync("ipconfig /release");
+    execSync("ipconfig /renew");
+  } catch (error) {
+    console.error("Error executing network commands:", error);
+    throw error;
+  }
+}
 // Exporting functions without redeclaring responseResult
 export { processBonusCode, sendRequest };
