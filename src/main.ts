@@ -89,6 +89,7 @@ async function listChats() {
 async function forwardNewMessages() {
   try {
     console.log("Calling forwardNewMessages...");
+    await client.connect(); // Connect the client before handling messages
     client.addEventHandler(async (event: any) => {
       try {
         const message = event.message;
@@ -118,13 +119,15 @@ async function forwardNewMessages() {
           "Processing Forward the message to the destination channel"
         );
         await forwardMessage(message, channelIdAsString);
-      } catch (error: any) {
+      } catch (error) {
         console.error("Error handling new message event:", error);
-        handleTelegramError(error);
+        handleTelegramError(error as Error); // Use type assertion
       }
     }, new NewMessage({}));
+    console.log("Message forwarding initialized successfully.");
   } catch (error) {
     console.error("Error setting up message forwarding:", error);
+    handleTelegramError(error as Error); // Use type assertion
   }
 }
 
