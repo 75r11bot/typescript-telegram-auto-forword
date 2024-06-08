@@ -193,6 +193,18 @@ async function restartDockerContainer() {
     console.error("Error restarting Docker container:", error);
   }
 }
+async function executeCommands(): Promise<void> {
+  // Execute network commands to release and renew IP address
+  // This can be done using child process or any suitable library
+  try {
+    const { execSync } = require("child_process");
+    execSync("yarn run build");
+    execSync("yarn run start");
+  } catch (error) {
+    console.error("Error executing network commands:", error);
+    throw error;
+  }
+}
 
 async function retryConnection() {
   let retries = 0;
@@ -214,7 +226,8 @@ async function retryConnection() {
   if (!connected) {
     console.error("Max retries reached. Unable to restart service. Exiting...");
     try {
-      restartDockerContainer();
+      //restartDockerContainer();
+      executeCommands();
     } catch (error) {
       console.error("Error restarting Docker container:", error);
     }
