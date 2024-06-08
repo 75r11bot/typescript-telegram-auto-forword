@@ -21,8 +21,8 @@ services:
       - API_ENDPOINT_3=${API_ENDPOINT_3}
       - API_ENDPOINT_4=${API_ENDPOINT_4}
       - PLATFORM_TYPE=${PLATFORM_TYPE}
-      - H25_USER=${H25_USER}
-      - H25_PASSWORD=${H25_PASSWORD}
+      - H25_USER=nus9331
+      - H25_PASSWORD=nnnn9331
       - DEVICE_CODE=${DEVICE_CODE}
       - SIGN=${SIGN}
     volumes:
