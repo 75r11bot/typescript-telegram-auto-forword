@@ -81,13 +81,14 @@ async function loginAndCaptureResponse(
 
 async function getH25Token(user: string, password: string) {
   let token: string | null = null;
+  let page: Page | null = null; // Declare page variable
 
   try {
     const browser = await chromium.launch({
       headless: true, // Run in headless mode
     });
     const context = await browser.newContext();
-    const page = await context.newPage();
+    page = await context.newPage(); // Assign value to page variable
 
     token = await loginAndCaptureResponse(page, user, password);
 
@@ -101,6 +102,14 @@ async function getH25Token(user: string, password: string) {
     console.log("Extracted token:", token);
   } else {
     console.log("Token not found.");
+    if (page) {
+      // Retry login after 5 seconds
+      setTimeout(async () => {
+        token = await loginAndCaptureResponse(page, user, password);
+      }, 5000);
+    } else {
+      console.error("Page is not defined.");
+    }
   }
 
   return token;
