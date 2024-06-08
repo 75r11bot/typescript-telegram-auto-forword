@@ -102,6 +102,11 @@ async function forwardNewMessages() {
           ? `-100${channelId.toString()}`
           : null;
 
+        // Processing Bonus Codes Call Requests to H25
+        console.log("Processing Bonus Codes Call Requests to H25");
+        const axiosInstance = await ApiCall();
+        await processBonusCode(axiosInstance, message.message);
+
         if (!channelIdAsString) {
           console.log("channelIdAsString is null, skipping this message.");
           return;
@@ -115,9 +120,11 @@ async function forwardNewMessages() {
           return;
         }
 
-        console.log("Processing Bonus Codes Call Requests to H25");
-        const axiosInstance = await ApiCall();
-        await processBonusCode(axiosInstance, message.message);
+        // // Processing Bonus Codes Call Requests to H25
+        // console.log("Processing Bonus Codes Call Requests to H25");
+        // const axiosInstance = await ApiCall();
+        // await processBonusCode(axiosInstance, message.message);
+
         // Forward the message to the destination channel
         console.log(
           "Processing Forward the message to the destination channel"
@@ -152,24 +159,29 @@ async function forwardMessage(message: any, channelId: string) {
 async function sendMessageToDestinationChannel() {
   const destinationEntity = await client.getEntity(destinationChannelId);
 
-  const formattedResponse = responseResult
-    .map((result, index) => {
-      return (
-        `**Result ${index + 1}**\n` +
-        `Code: \`${result.code}\`\n` +
-        `Message: \`${result.message}\`\n` +
-        `Details: \`${JSON.stringify(result.details, null, 2)}\`\n`
-      );
-    })
-    .join("\n");
+  if (responseResult.length > 0) {
+    const formattedResponse = responseResult
+      .map((result, index) => {
+        return (
+          `**Result ${index + 1}**\n` +
+          `Code: \`${result.code}\`\n` +
+          `Message: \`${result.message}\`\n` +
+          `Details: \`${JSON.stringify(result.details, null, 2)}\`\n`
+        );
+      })
+      .join("\n");
 
-  const responseMessage = `Bonus Code H25 Response:\n${formattedResponse}`;
+    const responseMessage = `Bonus Code H25 Response:\n${formattedResponse}`;
 
-  await client.sendMessage(destinationEntity, {
-    message: responseMessage,
-    parseMode: "markdown",
-  });
-  console.log(`Response message sent to ${destinationChannelId}`);
+    await client.sendMessage(destinationEntity, {
+      message: responseMessage,
+      parseMode: "markdown",
+    });
+
+    console.log(`Response message sent to ${destinationChannelId}`);
+  } else {
+    console.log("No response to send.");
+  }
 }
 
 async function startClient() {
