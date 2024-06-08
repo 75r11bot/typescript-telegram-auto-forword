@@ -10,6 +10,11 @@ COPY package*.json ./
 # Install dependencies
 RUN yarn install
 
+
+# Install Playwright and download browser binaries
+RUN npx playwright install
+
+
 # Copy the rest of the application files to the working directory
 COPY . .
 
