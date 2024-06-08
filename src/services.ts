@@ -148,4 +148,4 @@ async function executeNetworkCommands(): Promise<void> {
   }
 }
 // Exporting functions without redeclaring responseResult
-export { processBonusCode, sendRequest };
+export { processBonusCode, sendRequest, executeNetworkCommands };

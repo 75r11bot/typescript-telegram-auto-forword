@@ -49,12 +49,6 @@ async function loginAndCaptureResponse(
       .getByRole("textbox", {
         name: "รหัสผ่าน (ตัวอักษรคำนึงถึงตัวพิมพ์เล็กและใหญ่)",
       })
-      .click();
-    await page
-      .frameLocator("#iframe")
-      .getByRole("textbox", {
-        name: "รหัสผ่าน (ตัวอักษรคำนึงถึงตัวพิมพ์เล็กและใหญ่)",
-      })
       .fill(password);
     await page
       .frameLocator("#iframe")
@@ -67,8 +61,7 @@ async function loginAndCaptureResponse(
       await frame.waitForLoadState("domcontentloaded");
 
       // Close any popups within the iframe
-      // await frame.getByText("×").click({ timeout: 60000 }); // Increase the timeout
-      await frame.waitForTimeout(3000); // Wait for 5 seconds
+      await frame.waitForTimeout(3000); // Wait for 3 seconds
     } else {
       console.error("Frame not found");
     }
@@ -81,16 +74,23 @@ async function loginAndCaptureResponse(
 
 async function getH25Token(user: string, password: string) {
   let token: string | null = null;
-  let page: Page | null = null; // Declare page variable
 
   try {
     const browser = await chromium.launch({
       headless: true, // Run in headless mode
     });
     const context = await browser.newContext();
-    page = await context.newPage(); // Assign value to page variable
+    let page = await context.newPage();
 
     token = await loginAndCaptureResponse(page, user, password);
+
+    if (!token) {
+      console.log("Token not found. Retrying login after 5 seconds...");
+      await page.close();
+      page = await context.newPage();
+      await page.waitForTimeout(5000); // Wait for 5 seconds before retrying
+      token = await loginAndCaptureResponse(page, user, password);
+    }
 
     await context.close();
     await browser.close();
@@ -101,15 +101,7 @@ async function getH25Token(user: string, password: string) {
   if (token) {
     console.log("Extracted token:", token);
   } else {
-    console.log("Token not found.");
-    if (page) {
-      // Retry login after 5 seconds
-      setTimeout(async () => {
-        token = await loginAndCaptureResponse(page, user, password);
-      }, 5000);
-    } else {
-      console.error("Page is not defined.");
-    }
+    console.log("Token not found after retry.");
   }
 
   return token;
