@@ -123,6 +123,9 @@ async function forwardNewMessages() {
           "Processing Forward the message to the destination channel"
         );
         await forwardMessage(message, channelIdAsString);
+
+        // Send responseResult to the destination channel
+        await sendMessageToDestinationChannel();
       } catch (error) {
         console.error("Error handling new message event:", error);
         handleTelegramError(error as Error); // Use type assertion
@@ -144,6 +147,29 @@ async function forwardMessage(message: any, channelId: string) {
     messages: [message.id],
   });
   console.log(`Message forwarded from ${channelId} to ${destinationChannelId}`);
+}
+
+async function sendMessageToDestinationChannel() {
+  const destinationEntity = await client.getEntity(destinationChannelId);
+
+  const formattedResponse = responseResult
+    .map((result, index) => {
+      return (
+        `**Result ${index + 1}**\n` +
+        `Code: \`${result.code}\`\n` +
+        `Message: \`${result.message}\`\n` +
+        `Details: \`${JSON.stringify(result.details, null, 2)}\`\n`
+      );
+    })
+    .join("\n");
+
+  const responseMessage = `Bonus Code H25 Response:\n${formattedResponse}`;
+
+  await client.sendMessage(destinationEntity, {
+    message: responseMessage,
+    parseMode: "markdown",
+  });
+  console.log(`Response message sent to ${destinationChannelId}`);
 }
 
 async function startClient() {
