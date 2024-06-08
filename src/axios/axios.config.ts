@@ -29,12 +29,15 @@ async function ApiCall(): Promise<AxiosInstance> {
     },
   });
 
-  for (const endpoint of endpoints) {
-    let token = await getH25Token(h25Username, h25Password);
+  let token: string | null = null;
 
+  for (const endpoint of endpoints) {
     if (!token) {
-      console.log("Failed to retrieve token.");
-      continue;
+      token = await getH25Token(h25Username, h25Password);
+      if (!token) {
+        console.log("Failed to retrieve token.");
+        continue;
+      }
     }
 
     try {
@@ -102,11 +105,14 @@ async function ApiCall(): Promise<AxiosInstance> {
       }
     } catch (error: any) {
       console.error(`Error connecting to ${endpoint}: ${error.message}`);
-      // If the error is related to this token, continue with the next token
       if (error.response && error.response.status === 401) {
+        console.log("Token might be invalid. Generating a new token.");
+        token = await getH25Token(h25Username, h25Password);
+        if (!token) {
+          console.log("Failed to retrieve a new token.");
+        }
         continue;
       }
-      // If the error is not related to authentication, continue with the next endpoint
       if (!error.response || error.response.status !== 401) {
         break;
       }
