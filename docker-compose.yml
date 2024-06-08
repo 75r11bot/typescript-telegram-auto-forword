@@ -24,6 +24,7 @@ services:
       - PLATFORM_TYPE=${PLATFORM_TYPE}
       - H25_TOKEN1=${H25_TOKEN1}
       - H25_TOKEN2=${H25_TOKEN2}
+      - H25_TOKEN3=${H25_TOKEN3}
       - DEVICE_CODE=${DEVICE_CODE}
       - SIGN=${SIGN}
       - USER_CHOICE=${USER_CHOICE}

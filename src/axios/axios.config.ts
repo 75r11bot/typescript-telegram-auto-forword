@@ -14,9 +14,11 @@ async function ApiCall(): Promise<AxiosInstance> {
     process.env.API_ENDPOINT_4,
   ].filter(Boolean) as string[];
 
-  const tokens = [process.env.H25_TOKEN1, process.env.H25_TOKEN2].filter(
-    Boolean
-  ) as string[];
+  const tokens = [
+    process.env.H25_TOKEN1,
+    process.env.H25_TOKEN2,
+    process.env.H25_TOKEN3,
+  ].filter(Boolean) as string[];
 
   axiosRetry(axios, {
     retries: 3,
@@ -61,7 +63,7 @@ async function ApiCall(): Promise<AxiosInstance> {
           Sign: sign,
           Timestamp: moment().toISOString(),
           "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
         };
 
         const axiosInstance = axios.create({

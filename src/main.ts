@@ -13,9 +13,9 @@ dotenv.config();
 const apiId = Number(process.env.API_ID);
 const apiHash = process.env.API_HASH || "";
 const sourceChannelIds = process.env.SOURCE_CHANNEL_IDS
-  ? process.env.SOURCE_CHANNEL_IDS.split(",").map((id) => Number(id.trim()))
+  ? process.env.SOURCE_CHANNEL_IDS.split(",").map((id) => id.trim())
   : [];
-const destinationChannelId = Number(process.env.DESTINATION_CHANNEL_ID);
+const destinationChannelId = process.env.DESTINATION_CHANNEL_ID || "";
 const phoneNumber = process.env.APP_YOUR_PHONE || "";
 const userPassword = process.env.APP_YOUR_PWD || "";
 const port = Number(process.env.PORT) || 5000;
@@ -37,22 +37,17 @@ const sessionString = fs.existsSync(sessionFilePath)
 let client: TelegramClient;
 
 async function initializeClient() {
-  try {
-    client = new TelegramClient(
-      new StringSession(sessionString),
-      apiId,
-      apiHash,
-      {
-        connectionRetries: 5, // Disable internal retries
-        timeout: 86400000, // 24 hours
-        useWSS: true,
-      }
-    );
-    console.log("Telegram client initialized successfully.");
-  } catch (error: any) {
-    console.error("Failed to initialize Telegram client:", error.message);
-    setTimeout(initializeClient, 5000); // Retry after 5 seconds
-  }
+  client = new TelegramClient(
+    new StringSession(sessionString),
+    apiId,
+    apiHash,
+    {
+      connectionRetries: 5,
+      timeout: 86400000, // 24 hours
+      useWSS: true,
+    }
+  );
+  console.log("Telegram client initialized successfully.");
 }
 
 async function handleTelegramError(error: Error) {
@@ -79,14 +74,22 @@ async function getInput(prompt: string): Promise<string> {
 async function listChats() {
   try {
     console.log("Calling listChats...");
-    console.log("Listing chats...");
     await startClient();
 
     const dialogs = await client.getDialogs();
+
     for (const dialog of dialogs) {
       console.log(`Chat ID: ${dialog.id}, Title: ${dialog.title}`);
+      // if (
+      //   dialog.title === "H25 THAILAND 🇹🇭" ||
+      //   dialog.title === "TestForwardMessage"
+      // ) {
+      //   sourceChannelIds.push(dialog.id);
+      // }
     }
     console.log("listChats completed");
+
+    // Once the sourceChannelIds are populated, call forwardNewMessages
   } catch (error) {
     console.error("Error listing chats:", error);
   }
@@ -95,37 +98,44 @@ async function listChats() {
 async function forwardNewMessages() {
   try {
     console.log("Calling forwardNewMessages...");
-    console.log("Setting up message forwarding...");
-    await startClient();
-
-    const session = client.session.save();
-    if (typeof session === "string") {
-      await fs.promises.writeFile(sessionFilePath, session);
-    } else {
-      console.error("Session is not a string:", session);
-    }
 
     client.addEventHandler(async (event: any) => {
       try {
         const message = event.message;
         const channelId = message.peerId?.channelId;
+        const channelIdAsString = channelId
+          ? `-100${channelId.toString()}`
+          : null;
 
-        console.log("Processing Bonus Code Check Data and Call Requests H25");
-        const axiosInstance = await ApiCall(); // Initialize axiosInstance here
-        await processBonusCode(axiosInstance, message.message);
         console.log("New message received: ", message.message);
-        console.log(
-          "Check message received: ",
-          channelId && sourceChannelIds.includes(channelId)
-        );
+        console.log("Message received from channelId: ", channelIdAsString);
 
-        if (channelId && sourceChannelIds.includes(channelId)) {
-          await forwardMessage(message, channelId);
-        } else {
-          console.log(
-            "New message received from a different source, cannot forward it to the destination channel"
-          );
+        // console.log("Processing Bonus Codes Call Requests to H25");
+        // const axiosInstance = await ApiCall();
+        // await processBonusCode(axiosInstance, message.message);
+
+        if (!channelIdAsString) {
+          console.log("channelIdAsString is null, skipping this message.");
+          return;
         }
+
+        // Check if the message is from one of the source channels
+        if (!sourceChannelIds.includes(channelIdAsString)) {
+          console.log(
+            "Message not from a source channel. Skipping forwarding."
+          );
+          return;
+        }
+
+        // Forward the message to the destination channel
+        console.log(
+          "Processing Forward the message to the destination channel"
+        );
+        await forwardMessage(message, channelIdAsString);
+
+        console.log("Processing Bonus Codes Call Requests to H25");
+        const axiosInstance = await ApiCall();
+        await processBonusCode(axiosInstance, message.message);
       } catch (error: any) {
         console.error("Error handling new message event:", error);
         handleTelegramError(error);
@@ -134,10 +144,9 @@ async function forwardNewMessages() {
   } catch (error) {
     console.error("Error setting up message forwarding:", error);
   }
-  await startClient();
 }
 
-async function forwardMessage(message: any, channelId: number) {
+async function forwardMessage(message: any, channelId: string) {
   const sourceEntity = await client.getEntity(channelId);
   const destinationEntity = await client.getEntity(destinationChannelId);
 
@@ -153,7 +162,10 @@ async function forwardMessage(message: any, channelId: number) {
 
 async function startClient() {
   try {
-    await initializeClient();
+    if (!client) {
+      await initializeClient();
+    }
+
     await client.start({
       phoneNumber: async () => phoneNumber,
       password: async () => userPassword,
@@ -174,19 +186,19 @@ async function startClient() {
     console.log(`Signed in successfully as ${displayName}`);
   } catch (error) {
     console.error("Failed to start client:", error);
-    setTimeout(startClient, retryInterval); // Retry after interval
+    setTimeout(startClient, retryInterval);
   }
 }
 
 async function regenerateSession() {
   try {
     console.log("Regenerating session...");
-    fs.unlinkSync(sessionFilePath); // Delete the session file
+    fs.unlinkSync(sessionFilePath);
     await initializeClient();
     await startClient();
   } catch (error) {
     console.error("Failed to regenerate session:", error);
-    setTimeout(regenerateSession, retryInterval); // Retry after interval
+    setTimeout(regenerateSession, retryInterval);
   }
 }
 
@@ -194,11 +206,10 @@ async function restartDockerContainer() {
   console.log("Restarting Docker container...");
   try {
     const { execSync } = require("child_process");
-    execSync("docker restart telegram-auto-forword-telegram-auto-forward-1");
+    execSync("docker restart telegram-auto-forward-1");
     console.log("Docker container restarted successfully.");
   } catch (error) {
     console.error("Error restarting Docker container:", error);
-    // Handle the error appropriately, such as logging or retrying
   }
 }
 
@@ -222,13 +233,12 @@ async function retryConnection() {
   if (!connected) {
     console.error("Max retries reached. Unable to restart service. Exiting...");
     try {
-      restartDockerContainer(); // Restart Docker container if max retries reached
+      restartDockerContainer();
     } catch (error) {
       console.error("Error restarting Docker container:", error);
-      // Handle the error appropriately
     }
   } else {
-    retryInterval = INITIAL_RETRY_INTERVAL; // Reset the retry interval
+    retryInterval = INITIAL_RETRY_INTERVAL;
   }
 }
 
@@ -259,11 +269,10 @@ async function startService() {
     await forwardNewMessages();
   } catch (error) {
     console.error("Error in main service:", error);
-    retryConnection(); // Retry connection after Docker container restart
+    retryConnection();
   }
 }
 
-// Entry point of the application
 startService().catch((error) => {
   console.error("Unexpected error in startService:", error);
   retryConnection();
