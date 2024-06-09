@@ -26,6 +26,7 @@ declare module "telegram/sessions" {
 
 declare module "telegram/events" {
   export class NewMessage {
+    message: any;
     constructor(options: any);
   }
 

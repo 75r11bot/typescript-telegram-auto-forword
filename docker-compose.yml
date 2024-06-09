@@ -12,22 +12,24 @@ services:
       - DESTINATION_CHANNEL_ID=${DESTINATION_CHANNEL_ID}
       - SOURCE_CHANNEL_ID=${SOURCE_CHANNEL_ID}
       - SOURCE_CHANNEL_IDS=${SOURCE_CHANNEL_IDS}
+      - RESPONSE_CHANNEL_ID=${RESPONSE_CHANNEL_ID}
       - APP_YOUR_PWD=${APP_YOUR_PWD}
       - API_ENDPOINT_1=${API_ENDPOINT_1}
       - API_ENDPOINT_2=${API_ENDPOINT_2}
       - API_ENDPOINT_3=${API_ENDPOINT_3}
       - API_ENDPOINT_4=${API_ENDPOINT_4}
       - PLATFORM_TYPE=${PLATFORM_TYPE}
-      - H25_USER=nus9331
-      - H25_PASSWORD=nnnn9331
+      - H25_USER=${H25_USER1}
+      - H25_PASSWORD=${H25_PASSWORD1}
       - DEVICE_CODE=${DEVICE_CODE}
       - SIGN=${SIGN}
+      - BOT_TOKEN=${DOCKER_BOT_TOKEN}
     volumes:
       - .:/usr/src/app
       - ./sessions:/usr/src/app/sessions
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:5000/ || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:5003/ || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
