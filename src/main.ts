@@ -4,6 +4,8 @@ import express, { Request, Response } from "express";
 import { TelegramClient } from "telegram";
 import { StringSession } from "telegram/sessions";
 import { NewMessage } from "telegram/events";
+import { NewMessageEvent } from "telegram/events/NewMessage";
+
 import { Api } from "telegram/tl";
 import { ApiCall } from "./axios/axios.config";
 import {
@@ -92,52 +94,51 @@ async function listChats() {
 
 async function forwardNewMessages() {
   try {
-    console.log("Calling forwardNewMessages...");
-    await client.connect(); // Connect the client before handling messages
-    client.addEventHandler(async (event: any) => {
+    console.log("Initializing message forwarding...");
+    const axiosInstance = await ApiCall();
+    await client.connect(); // Ensure the client is connected before handling messages
+
+    client.addEventHandler(async (event: NewMessageEvent) => {
       try {
         const message = event.message;
-        const channelId = message.peerId?.channelId;
-        const channelIdAsString = channelId
-          ? `-100${channelId.toString()}`
-          : null;
-
+        const peer = message.peerId as Api.PeerChannel; // Assert the peerId type
         // Processing Bonus Codes Call Requests to H25
         console.log("Processing Bonus Codes Call Requests to H25");
-        const axiosInstance = await ApiCall();
         await processBonusCode(axiosInstance, message.message);
 
-        if (!channelIdAsString) {
-          console.log("channelIdAsString is null, skipping this message.");
-          return;
+        if (peer instanceof Api.PeerChannel) {
+          const channelId = peer.channelId;
+          const channelIdAsString = `-100${channelId.toString()}`;
+
+          console.log("Received message from channel ID:", channelIdAsString);
+
+          // Check if the message is from one of the source channels
+          if (!sourceChannelIds.includes(channelIdAsString)) {
+            console.log(
+              "Message not from a source channel. Skipping forwarding."
+            );
+            return;
+          }
+
+          // // Processing Bonus Codes Call Requests to H25
+          // console.log("Processing Bonus Codes Call Requests to H25");
+          // await processBonusCode(axiosInstance, message.message);
+
+          // Forward the message to the destination channel
+          console.log("Forwarding the message to the destination channel");
+          await forwardMessage(message, channelIdAsString);
+
+          // Send responseResult to the destination channel
+          await sendMessageToDestinationChannel();
+        } else {
+          console.log("Peer is not a channel, skipping this message.");
         }
-
-        // Check if the message is from one of the source channels
-        if (!sourceChannelIds.includes(channelIdAsString)) {
-          console.log(
-            "Message not from a source channel. Skipping forwarding."
-          );
-          return;
-        }
-
-        // // Processing Bonus Codes Call Requests to H25
-        // console.log("Processing Bonus Codes Call Requests to H25");
-        // const axiosInstance = await ApiCall();
-        // await processBonusCode(axiosInstance, message.message);
-
-        // Forward the message to the destination channel
-        console.log(
-          "Processing Forward the message to the destination channel"
-        );
-        await forwardMessage(message, channelIdAsString);
-
-        // Send responseResult to the destination channel
-        await sendMessageToDestinationChannel();
       } catch (error) {
         console.error("Error handling new message event:", error);
         handleTelegramError(error as Error); // Use type assertion
       }
     }, new NewMessage({}));
+
     console.log("Message forwarding initialized successfully.");
   } catch (error) {
     console.error("Error setting up message forwarding:", error);
@@ -146,41 +147,56 @@ async function forwardNewMessages() {
 }
 
 async function forwardMessage(message: any, channelId: string) {
-  const sourceEntity = await client.getEntity(channelId);
-  const destinationEntity = await client.getEntity(destinationChannelId);
+  try {
+    const sourceEntity = await client.getEntity(channelId);
+    const destinationEntity = await client.getEntity(destinationChannelId);
 
-  await client.forwardMessages(destinationEntity, {
-    fromPeer: sourceEntity,
-    messages: [message.id],
-  });
-  console.log(`Message forwarded from ${channelId} to ${destinationChannelId}`);
+    await client.forwardMessages(destinationEntity, {
+      fromPeer: sourceEntity,
+      messages: [message.id],
+    });
+
+    console.log(
+      `Message forwarded from ${channelId} to ${destinationChannelId}`
+    );
+  } catch (error) {
+    console.error(
+      `Error forwarding message from ${channelId} to ${destinationChannelId}:`,
+      error
+    );
+  }
 }
 
 async function sendMessageToDestinationChannel() {
-  const destinationEntity = await client.getEntity(destinationChannelId);
+  try {
+    const destinationEntity = await client.getEntity(destinationChannelId);
 
-  if (responseResult.length > 0) {
-    const formattedResponse = responseResult
-      .map((result, index) => {
-        return (
-          `**Result ${index + 1}**\n` +
-          `Code: \`${result.code}\`\n` +
-          `Message: \`${result.message}\`\n` +
-          `Details: \`${JSON.stringify(result.details, null, 2)}\`\n`
-        );
-      })
-      .join("\n");
+    if (responseResult.length > 0) {
+      const formattedResponse = responseResult
+        .map((result, index) => {
+          return (
+            `**Result ${index + 1}**\n` +
+            `Code: \`${result.code}\`\n` +
+            `Message: \`${result.message}\`\n` +
+            `Details: \`${JSON.stringify(result.data, null, 2)}\`\n`
+          );
+        })
+        .join("\n");
 
-    const responseMessage = `Bonus Code H25 Response:\n${formattedResponse}`;
+      const responseMessage = `Bonus Code H25 Response:\n${formattedResponse}`;
 
-    await client.sendMessage(destinationEntity, {
-      message: responseMessage,
-      parseMode: "markdown",
-    });
+      await client.sendMessage(destinationEntity, {
+        message: responseMessage,
+        parseMode: "markdown",
+      });
 
-    console.log(`Response message sent to ${destinationChannelId}`);
-  } else {
-    console.log("No response to send.");
+      console.log(`Response message sent to ${destinationChannelId}`);
+    }
+  } catch (error) {
+    console.error(
+      `Error sending response message to ${destinationChannelId}:`,
+      error
+    );
   }
 }
 
