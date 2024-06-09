@@ -271,9 +271,9 @@ async function retryConnection() {
 
   if (!connected) {
     console.error("Max retries reached. Unable to restart service. Exiting...");
-    await executeNetworkCommands();
     try {
-      restartDockerContainer();
+      await executeNetworkCommands();
+      // restartDockerContainer();
     } catch (error) {
       console.error("Error restarting Docker container:", error);
     }
