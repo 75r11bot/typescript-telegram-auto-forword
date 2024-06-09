@@ -134,12 +134,14 @@ async function processBonusCode(
 
 // Function to parse message
 function parseMessage(message: string): string[] {
-  const lines = message.trim().split("\n");
   const codes: string[] = [];
 
-  for (const line of lines) {
-    const numbers = line.trim().split(/\s+/);
-    codes.push(...numbers);
+  if (message !== undefined) {
+    const lines = message.trim().split("\n");
+    for (const line of lines) {
+      const numbers = line.trim().split(/\s+/);
+      codes.push(...numbers);
+    }
   }
 
   return codes;
