@@ -5,6 +5,7 @@ import { TelegramClient } from "telegram";
 import { StringSession } from "telegram/sessions";
 import { NewMessage } from "telegram/events";
 import { NewMessageEvent } from "telegram/events/NewMessage";
+import axios, { AxiosInstance, AxiosError, AxiosResponse } from "axios";
 
 import { Api } from "telegram/tl";
 import { ApiCall } from "./axios/axios.config";
@@ -15,7 +16,6 @@ import {
   executeNetworkCommands,
   responseResult,
 } from "./services";
-import { AxiosInstance } from "axios";
 
 dotenv.config();
 
@@ -373,12 +373,10 @@ async function restartService() {
 
 async function checkNetworkConnectivity(): Promise<boolean> {
   try {
-    // Use a simple HTTP request to check connectivity
-    const response = await axiosInstance.get("/", {
+    const response = await axios.get("https://www.google.com", {
       timeout: 5000, // Timeout after 5 seconds
     });
-    console.log("AcheckNetworkConnectivity:", response);
-
+    console.log("checkNetworkConnectivity status:", response.status);
     // If the response status is between 200 and 299, consider it a successful connection
     return response.status >= 200 && response.status < 300;
   } catch (error) {
