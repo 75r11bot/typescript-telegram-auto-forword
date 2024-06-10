@@ -127,9 +127,9 @@ async function processBonusCode(
     (code) => numericalRegex.test(code) && code.length > 10
   );
   console.log("Bonus Codes:", filteredCodes);
-
   if (filteredCodes.length > 0) {
-    await sendNextRequest(filteredCodes, axiosInstance);
+    let bonusCodes = shuffleArray(filteredCodes);
+    await sendNextRequest(bonusCodes, axiosInstance);
   } else {
     console.log("No valid bonus codes found:", filteredCodes);
   }
@@ -163,5 +163,12 @@ async function executeNetworkCommands(): Promise<void> {
   }
 }
 
+function shuffleArray(array: any[]) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]]; // Swap elements
+  }
+  return array;
+}
 // Exporting functions without redeclaring responseResult
 export { processBonusCode, sendRequest, executeNetworkCommands };

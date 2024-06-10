@@ -151,7 +151,6 @@ async function forwardNewMessages(axiosInstance: AxiosInstance) {
             // Processing Bonus Codes Call Requests to H25
             console.log("Processing Bonus Codes Call Requests to H25");
             await processBonusCode(axiosInstance, message.message);
-
             // Send responseResult to the destination channel
             await sendMessageToDestinationChannel();
           }
