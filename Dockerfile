@@ -1,8 +1,8 @@
 # Use the official Node.js image as the base image
 FROM node:16
 
-# ENV NODE_ENV=${NODE_ENV}
-ENV NODE_ENV="production"
+ENV NODE_ENV=${NODE_ENV}
+# ENV NODE_ENV="production"
 
 # Set the working directory
 WORKDIR /usr/src/app
