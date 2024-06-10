@@ -468,21 +468,20 @@ async function startService() {
     bot.on("message", async (ctx: { message: any }) => {
       const message = ctx.message;
       if (message && message.caption !== undefined) {
-        // เพิ่มการตรวจสอบว่า message ไม่ได้เป็น undefined ก่อนที่จะเข้าถึง message.caption
-        console.log("bot received new message caption: ", message.caption);
-        // Bot Processing Bonus Codes Call Requests to H25
+        console.log("Bot received new message caption:", message.caption);
         console.log("Bot Processing Bonus Codes Call Requests to H25");
         await processBonusCode(axiosInstance, message.caption);
       } else if (message && message.text !== undefined) {
-        // เพิ่มการตรวจสอบว่า message.text ไม่ได้เป็น undefined ก่อนที่จะเข้าถึง message.text
-        console.log("bot received new message text: ", message.text);
-        // Bot Processing Bonus Codes Call Requests to H25
+        console.log("Bot received new message text:", message.text);
         console.log("Bot Processing Bonus Codes Call Requests to H25");
       } else {
         console.log("Invalid message received:", message);
       }
 
-      await botSendMessageToDestinationChannel(bot);
+      // Ensure the message is not from the response channel before sending a response
+      if (!responesChannelId.includes(message.channel_id)) {
+        await botSendMessageToDestinationChannel(bot);
+      }
     });
 
     return server; // Return the Express server instance
