@@ -227,7 +227,7 @@ async function botSendMessageToDestinationChannel(
   try {
     const destinationChannelId = responesChannelId;
     const resultData = responseResult.result;
-    const username = responseResult.user; // Fixed typo from `responseResult.username` to `responseResult.user`
+    const username = responseResult.username; // Fixed typo from `responseResult.username` to `responseResult.user`
     const summaryData = processH25Response(resultData);
 
     if (resultData.length > 0) {
