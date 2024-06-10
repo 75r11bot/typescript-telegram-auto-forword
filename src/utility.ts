@@ -1,5 +1,6 @@
 import { Page, chromium } from "playwright";
-
+import dotenv from "dotenv";
+dotenv.config();
 async function loginAndCaptureResponse(
   page: Page,
   user: string,
@@ -61,7 +62,7 @@ async function loginAndCaptureResponse(
       await frame.waitForLoadState("domcontentloaded");
 
       // Close any popups within the iframe
-      await frame.waitForTimeout(3000); // Wait for 3 seconds
+      await frame.waitForTimeout(5000); // Wait for 5 seconds
     } else {
       console.error("Frame not found");
     }
@@ -96,6 +97,7 @@ async function getH25Token(user: string, password: string) {
     await browser.close();
   } catch (error) {
     console.error("Error occurred during browser operation:", error);
+    token = process.env.H25_TOKEN || "";
   }
 
   if (token) {
