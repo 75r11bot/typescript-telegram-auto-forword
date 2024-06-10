@@ -1,8 +1,6 @@
 # Use the official Node.js image as the base image
 FROM node:16
 
-# ENV NODE_ENV=${NODE_ENV}
-ENV NODE_ENV="production"
 
 # Set the working directory
 WORKDIR /usr/src/app
@@ -47,6 +45,9 @@ RUN yarn run build
 
 # Expose the port the app runs on
 EXPOSE 5000
+
+# ENV NODE_ENV=${NODE_ENV}
+ENV NODE_ENV="production"
 
 # Add the healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 CMD curl -f ${BASE_URL} || exit 1
