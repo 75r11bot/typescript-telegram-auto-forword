@@ -10,8 +10,8 @@ const RETRY_INTERVAL_MS = 500; // Retry interval for specific response codes in 
 const RATE_LIMIT_INTERVAL_MS = 100; // Interval to wait if rate limit is exceeded in milliseconds
 const MAX_RETRY_COUNT = 2;
 
-// Declare and export responseResult array
-export const responseResult: any[] = [];
+// Declare and export responseResult object
+export const responseResult: any = { user: "", result: [] };
 
 // Interface for form data
 interface FormData {
@@ -37,6 +37,9 @@ async function sendRequest(
   };
 
   try {
+    // Capture the username from axiosInstance params
+    responseResult.user = axiosInstance.defaults.params?.username || "";
+
     const response: AxiosResponse = await axiosInstance.post(
       `/cash/v/pay/generatePayCardV2`,
       formData
@@ -62,7 +65,7 @@ async function sendRequest(
         await sendRequest(cardNo, axiosInstance, retryCount);
         break;
       default:
-        responseResult.push(responseData);
+        responseResult.result.push(responseData);
         return; // Exit the function on success
     }
 
@@ -72,7 +75,7 @@ async function sendRequest(
       console.error("Maximum retry count reached. Aborting request.");
     }
   } catch (error: unknown) {
-    handleError(error, cardNo, axiosInstance, retryCount);
+    await handleError(error, cardNo, axiosInstance, retryCount);
   }
 }
 
@@ -93,7 +96,7 @@ async function handleError(
   } else {
     console.error(
       "Error sending request to API:",
-      (error as any).stack || (error as any).message
+      (error as Error).stack || (error as Error).message
     );
   }
 }

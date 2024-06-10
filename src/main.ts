@@ -48,6 +48,24 @@ const sessionString = fs.existsSync(sessionFilePath)
 let client: TelegramClient;
 let axiosInstance: AxiosInstance;
 let expressServer: any; // Define a variable to store the Express server instance
+interface ApiResponse {
+  code: number;
+  message: string;
+  details: {
+    orderNo?: string;
+  };
+}
+
+interface Summary {
+  success: {
+    count: number;
+    orders: string[];
+  };
+  failure: {
+    count: number;
+    details: { [message: string]: number };
+  };
+}
 
 async function initializeClient() {
   client = new TelegramClient(
@@ -172,23 +190,70 @@ async function forwardMessage(message: any, channelId: string) {
   }
 }
 
+async function processH25Response(responses: ApiResponse[]): Promise<Summary> {
+  const summary: Summary = {
+    success: {
+      count: 0,
+      orders: [],
+    },
+    failure: {
+      count: 0,
+      details: {},
+    },
+  };
+
+  responses.forEach((response) => {
+    if (response.code === 10000) {
+      summary.success.count += 1;
+      if (response.details && response.details.orderNo) {
+        summary.success.orders.push(response.details.orderNo);
+      }
+    } else {
+      summary.failure.count += 1;
+      if (!summary.failure.details[response.message]) {
+        summary.failure.details[response.message] = 0;
+      }
+      summary.failure.details[response.message] += 1;
+    }
+  });
+
+  return summary;
+}
+
 async function sendMessageToDestinationChannel() {
   try {
     const destinationEntity = await client.getEntity(responesChannelId);
+    const resultData = responseResult.result;
+    const username = responseResult.username;
+    let summaryData = processH25Response(resultData);
 
-    if (responseResult.length > 0) {
-      const formattedResponse = responseResult
-        .map((result, index) => {
-          return (
-            `**Result ${index + 1}**\n` +
-            `Code: \`${result.code}\`\n` +
-            `Message: \`${result.message}\`\n` +
-            `Details: \`${JSON.stringify(result.data, null, 2)}\`\n`
-          );
-        })
+    if (resultData.length > 0) {
+      const formattedResponse = resultData
+        .map(
+          (
+            result: { code: any; message: any; details: any },
+            index: number
+          ) => {
+            return (
+              `**Result ${index + 1}**\n` +
+              `Code: \`${result.code}\`\n` +
+              `Message: \`${result.message}\`\n` +
+              `Details: \`${JSON.stringify(result.details, null, 2)}\`\n`
+            );
+          }
+        )
         .join("\n");
 
-      const responseMessage = `Bonus Code H25 Response:\n${formattedResponse}`;
+      const summaryResponse =
+        `Summary:\n` +
+        `Success Count: ${(await summaryData).success.count}\n` +
+        `Success Orders: ${(await summaryData).success.orders.join(", ")}\n` +
+        `Failure Count: ${(await summaryData).failure.count}\n` +
+        `Failure Details: ${Object.entries((await summaryData).failure.details)
+          .map(([message, count]) => `${message}: ${count}`)
+          .join(", ")}`;
+
+      const responseMessage = `Bonus Code H25 Response User ${username}:\n${formattedResponse}\n\n${summaryResponse}`;
 
       await client.sendMessage(destinationEntity, {
         message: responseMessage,
@@ -291,16 +356,19 @@ async function startService() {
     app.use(express.json());
 
     app.get("/", (req: Request, res: Response) => {
+      const resultData = responseResult.result;
+      const username = responseResult.username;
       res.send(`
         <html>
           <head><title>Telegram Forwarder Service</title></head>
           <body>
             <h1>Telegram Forwarder Service</h1>
             <p>Service is running and ready to forward messages.</p>
+            <h1>โค้ดโบนัสฟรี ${username}</h1>
             <ul>
-              ${responseResult
+              ${resultData
                 .map(
-                  (result) =>
+                  (result: { code: any; message: any }) =>
                     `<li>Code: ${result.code}, Message: ${result.message}</li>`
                 )
                 .join("")}
