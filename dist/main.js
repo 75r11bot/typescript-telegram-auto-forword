@@ -18,16 +18,21 @@ const express_1 = __importDefault(require("express"));
 const telegram_1 = require("telegram");
 const sessions_1 = require("telegram/sessions");
 const events_1 = require("telegram/events");
+const axios_1 = __importDefault(require("axios"));
+const tl_1 = require("telegram/tl");
 const axios_config_1 = require("./axios/axios.config");
+const bot_1 = require("./bot");
 const services_1 = require("./services");
 dotenv_1.default.config();
 const apiId = Number(process.env.API_ID);
 const apiHash = process.env.API_HASH || "";
-const sourceChannelId = Number(process.env.SOURCE_CHANNEL_ID);
-const destinationChannelId = Number(process.env.DESTINATION_CHANNEL_ID);
+const sourceChannelIds = process.env.SOURCE_CHANNEL_IDS
+    ? process.env.SOURCE_CHANNEL_IDS.split(",").map((id) => id.trim())
+    : [];
+const destinationChannelId = process.env.DESTINATION_CHANNEL_ID || "";
+const responesChannelId = process.env.RESPONSE_CHANNEL_ID || "";
 const phoneNumber = process.env.APP_YOUR_PHONE || "";
 const userPassword = process.env.APP_YOUR_PWD || "";
-const telegramChannelId = Number(process.env.TELEGRAM_CHANNEL_ID);
 const port = Number(process.env.PORT) || 5000;
 const sessionsDirectory = "./sessions";
 const sessionFilePath = `${sessionsDirectory}/session.txt`;
@@ -41,27 +46,24 @@ const sessionString = fs_1.default.existsSync(sessionFilePath)
     ? fs_1.default.readFileSync(sessionFilePath, "utf-8")
     : "";
 let client;
+let axiosInstance;
+let expressServer; // Define a variable to store the Express server instance
 function initializeClient() {
     return __awaiter(this, void 0, void 0, function* () {
-        try {
-            client = new telegram_1.TelegramClient(new sessions_1.StringSession(sessionString), apiId, apiHash, {
-                connectionRetries: 5, // Disable internal retries
-                timeout: 86400000, // 24 hours
-                useWSS: true,
-            });
-            console.log("Telegram client initialized successfully.");
-        }
-        catch (error) {
-            console.error("Failed to initialize Telegram client:", error.message);
-            setTimeout(initializeClient, 5000); // Retry after 5 seconds
-        }
+        client = new telegram_1.TelegramClient(new sessions_1.StringSession(sessionString), apiId, apiHash, {
+            connectionRetries: 5,
+            timeout: 86400000, // 24 hours
+            useWSS: true,
+        });
+        console.log("Telegram client initialized successfully.");
     });
 }
 function handleTelegramError(error) {
     return __awaiter(this, void 0, void 0, function* () {
         console.error("Telegram error:", error);
-        if (error.message.includes("ECONNREFUSED")) {
-            console.log("Connection refused, retrying...");
+        if (error.message.includes("ECONNREFUSED") ||
+            error.message.includes("TIMEOUT")) {
+            console.log("Connection issue, retrying...");
             retryConnection();
         }
         else {
@@ -78,106 +80,118 @@ function getInput(prompt) {
         });
     });
 }
-function getLoginCode() {
-    return __awaiter(this, void 0, void 0, function* () {
-        return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                reject(new Error("Timeout"));
-            }, 60000); // 60 seconds
-            const handler = (event) => __awaiter(this, void 0, void 0, function* () {
-                var _a, _b;
-                const message = event.message;
-                console.log("Received message for login code:", message.message);
-                if ((_b = (_a = message.peerId) === null || _a === void 0 ? void 0 : _a.channelId) === null || _b === void 0 ? void 0 : _b.equals(telegramChannelId)) {
-                    const match = message.message.match(/(\d{5,6})/);
-                    if (match) {
-                        clearTimeout(timeout); // Clear the timeout
-                        client.removeEventHandler(handler, new events_1.NewMessage({})); // Remove the handler
-                        resolve(match[1]);
-                    }
-                }
-            });
-            client.addEventHandler(handler, new events_1.NewMessage({}));
-        }).catch((error) => __awaiter(this, void 0, void 0, function* () {
-            console.error("Error getting login code:", error);
-            return yield getInput("Enter the code: ");
-        }));
-    });
-}
 function listChats() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            console.log("Calling listChats..."); // เพิ่มบรรทัดนี้
-            console.log("Listing chats...");
+            console.log("Calling listChats...");
             yield startClient();
             const dialogs = yield client.getDialogs();
             for (const dialog of dialogs) {
                 console.log(`Chat ID: ${dialog.id}, Title: ${dialog.title}`);
             }
-            console.log("listChats completed"); // เพิ่มบรรทัดนี้
         }
         catch (error) {
             console.error("Error listing chats:", error);
         }
     });
 }
-function forwardNewMessages() {
+function forwardNewMessages(axiosInstance) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            console.log("Calling forwardNewMessages..."); // เพิ่มบรรทัดนี้
-            console.log("Setting up message forwarding...");
-            yield startClient();
-            const session = client.session.save();
-            if (typeof session === "string") {
-                yield fs_1.default.promises.writeFile(sessionFilePath, session);
-            }
-            else {
-                console.error("Session is not a string:", session);
-            }
+            console.log("Initializing message forwarding...");
+            yield client.connect(); // Ensure the client is connected before handling messages
             client.addEventHandler((event) => __awaiter(this, void 0, void 0, function* () {
-                var _a;
                 try {
                     const message = event.message;
-                    const sourceEntity = yield client.getEntity(sourceChannelId);
-                    const destinationEntity = yield client.getEntity(destinationChannelId);
-                    const channelId = (_a = message.peerId) === null || _a === void 0 ? void 0 : _a.channelId;
-                    console.log("Processing Bonus Code Check Data and Call Requests H25");
-                    const axiosInstance = yield (0, axios_config_1.ApiCall)(); // Initialize axiosInstance here
-                    yield (0, services_1.processBonusCode)(axiosInstance, message.message);
-                    console.log("New message received: ", message);
-                    console.log("Check message received: ", channelId && channelId.equals(sourceEntity.id));
-                    if (channelId && channelId.equals(sourceEntity.id)) {
-                        console.log(`Forwarding message with ID ${message.id} from ${sourceChannelId} to ${destinationChannelId}`);
-                        yield client.forwardMessages(destinationEntity, {
-                            fromPeer: sourceEntity,
-                            messages: [message.id],
-                        });
-                        console.log(`Message forwarded from ${sourceChannelId} to ${destinationChannelId}`);
+                    const peer = message.peerId; // Assert the peerId type
+                    console.log("client received new message: ", message.message);
+                    console.log("instanceof peer: ", peer instanceof tl_1.Api.PeerChannel);
+                    if (peer instanceof tl_1.Api.PeerChannel) {
+                        const channelId = peer.channelId;
+                        const channelIdAsString = `-100${channelId.toString()}`;
+                        console.log("Received message from channel ID:", channelIdAsString);
+                        // Forward the message to the destination channel
+                        console.log("Forwarding the message to the destination channel");
+                        yield forwardMessage(message, channelIdAsString);
+                        //Check if the message is from one of the source channels
+                        console.log("Check if the message is from one of the source channels:", sourceChannelIds.includes(channelIdAsString));
+                        if (sourceChannelIds.includes(channelIdAsString)) {
+                            // Processing Bonus Codes Call Requests to H25
+                            console.log("Processing Bonus Codes Call Requests to H25");
+                            yield (0, services_1.processBonusCode)(axiosInstance, message.message);
+                            // Send responseResult to the destination channel
+                            yield sendMessageToDestinationChannel();
+                        }
                     }
                     else {
-                        console.log("New message received from a different source, cannot forward it to the destination channel");
+                        console.log("Peer is not a channel, skipping this message.");
                     }
                 }
                 catch (error) {
                     console.error("Error handling new message event:", error);
-                    handleTelegramError(error);
+                    handleTelegramError(error); // Use type assertion
                 }
             }), new events_1.NewMessage({}));
-            console.log("forwardNewMessages completed"); // เพิ่มบรรทัดนี้
+            console.log("Message forwarding initialized successfully.");
         }
         catch (error) {
             console.error("Error setting up message forwarding:", error);
+            handleTelegramError(error); // Use type assertion
+        }
+    });
+}
+function forwardMessage(message, channelId) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const sourceEntity = yield client.getEntity(channelId);
+            const destinationEntity = yield client.getEntity(destinationChannelId);
+            yield client.forwardMessages(destinationEntity, {
+                fromPeer: sourceEntity,
+                messages: [message.id],
+            });
+            console.log(`Message forwarded from ${channelId} to ${destinationChannelId}`);
+        }
+        catch (error) {
+            console.error(`Error forwarding message from ${channelId} to ${destinationChannelId}:`, error);
+        }
+    });
+}
+function sendMessageToDestinationChannel() {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const destinationEntity = yield client.getEntity(responesChannelId);
+            if (services_1.responseResult.length > 0) {
+                const formattedResponse = services_1.responseResult
+                    .map((result, index) => {
+                    return (`**Result ${index + 1}**\n` +
+                        `Code: \`${result.code}\`\n` +
+                        `Message: \`${result.message}\`\n` +
+                        `Details: \`${JSON.stringify(result.data, null, 2)}\`\n`);
+                })
+                    .join("\n");
+                const responseMessage = `Bonus Code H25 Response:\n${formattedResponse}`;
+                yield client.sendMessage(destinationEntity, {
+                    message: responseMessage,
+                    parseMode: "markdown",
+                });
+                console.log(`Response message sent to ${destinationChannelId}`);
+            }
+        }
+        catch (error) {
+            console.error(`Error sending response message to ${destinationChannelId}:`, error);
         }
     });
 }
 function startClient() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            yield initializeClient();
+            if (!client) {
+                yield initializeClient();
+            }
             yield client.start({
                 phoneNumber: () => __awaiter(this, void 0, void 0, function* () { return phoneNumber; }),
                 password: () => __awaiter(this, void 0, void 0, function* () { return userPassword; }),
-                phoneCode: () => __awaiter(this, void 0, void 0, function* () { return yield getLoginCode(); }),
+                phoneCode: () => __awaiter(this, void 0, void 0, function* () { return yield getInput("Enter the code: "); }),
                 onError: (err) => {
                     if (err.message.includes("AUTH_KEY_DUPLICATED")) {
                         console.log("AUTH_KEY_DUPLICATED error detected. Regenerating session...");
@@ -185,6 +199,7 @@ function startClient() {
                     }
                     else {
                         console.log("Client start error:", err);
+                        handleTelegramError(err);
                     }
                 },
             });
@@ -194,7 +209,7 @@ function startClient() {
         }
         catch (error) {
             console.error("Failed to start client:", error);
-            setTimeout(startClient, retryInterval); // Retry after interval
+            yield retryConnection();
         }
     });
 }
@@ -202,13 +217,13 @@ function regenerateSession() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
             console.log("Regenerating session...");
-            fs_1.default.unlinkSync(sessionFilePath); // Delete the session file
+            fs_1.default.unlinkSync(sessionFilePath);
             yield initializeClient();
             yield startClient();
         }
         catch (error) {
             console.error("Failed to regenerate session:", error);
-            setTimeout(regenerateSession, retryInterval); // Retry after interval
+            setTimeout(regenerateSession, retryInterval);
         }
     });
 }
@@ -231,49 +246,167 @@ function retryConnection() {
         }
         if (!connected) {
             console.error("Max retries reached. Unable to restart service. Exiting...");
-            process.exit(1); // Exit process to trigger Docker restart
+            try {
+                yield (0, services_1.executeNetworkCommands)();
+                // restartDockerContainer();
+            }
+            catch (error) {
+                console.error("Error restarting Docker container:", error);
+            }
         }
         else {
-            retryInterval = INITIAL_RETRY_INTERVAL; // Reset the retry interval
+            retryInterval = INITIAL_RETRY_INTERVAL;
         }
     });
 }
 function startService() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
-            const axiosInstance = yield (0, axios_config_1.ApiCall)();
+            if (!axiosInstance) {
+                axiosInstance = yield (0, axios_config_1.ApiCall)();
+            }
             console.log(`======= Serving on http://0.0.0.0:${port} ======`);
             const app = (0, express_1.default)();
             app.use(express_1.default.json());
             app.get("/", (req, res) => {
                 res.send(`
         <html>
+          <head><title>Telegram Forwarder Service</title></head>
           <body>
-            <h1>Bonus Code H25 Response</h1>
-            <pre>${JSON.stringify(services_1.responseResult, null, 2)}</pre>
+            <h1>Telegram Forwarder Service</h1>
+            <p>Service is running and ready to forward messages.</p>
+            <ul>
+              ${services_1.responseResult
+                    .map((result) => `<li>Code: ${result.code}, Message: ${result.message}</li>`)
+                    .join("")}
+            </ul>
           </body>
         </html>
       `);
             });
-            app.listen(port, () => {
-                console.log(`Server is running at http://0.0.0.0:${port}/`);
+            const server = app.listen(port, () => {
+                console.log(`Server listening on port ${port}`);
             });
             yield listChats();
-            yield forwardNewMessages();
+            yield forwardNewMessages(axiosInstance);
+            bot_1.bot.on("message", (ctx) => __awaiter(this, void 0, void 0, function* () {
+                const message = ctx.message;
+                if (message && message.caption !== undefined) {
+                    // เพิ่มการตรวจสอบว่า message ไม่ได้เป็น undefined ก่อนที่จะเข้าถึง message.caption
+                    console.log("bot received new message caption: ", message.caption);
+                    // Bot Processing Bonus Codes Call Requests to H25
+                    console.log("Bot Processing Bonus Codes Call Requests to H25");
+                    yield (0, services_1.processBonusCode)(axiosInstance, message.caption);
+                    yield sendMessageToDestinationChannel();
+                }
+                else if (message && message.text !== undefined) {
+                    // เพิ่มการตรวจสอบว่า message.text ไม่ได้เป็น undefined ก่อนที่จะเข้าถึง message.text
+                    console.log("bot received new message text: ", message.text);
+                    // Bot Processing Bonus Codes Call Requests to H25
+                    console.log("Bot Processing Bonus Codes Call Requests to H25");
+                    yield (0, services_1.processBonusCode)(axiosInstance, message.text);
+                    yield sendMessageToDestinationChannel();
+                }
+                else {
+                    console.log("Invalid message received:", message);
+                }
+            }));
+            return server; // Return the Express server instance
         }
         catch (error) {
-            console.error("Error in main service:", error);
-            retryConnection();
+            console.error("Service initialization error:", error);
+            handleTelegramError(error); // Use type assertion
         }
     });
 }
-// Entry point of the application
-startService().catch((error) => {
-    console.error("Unexpected error in startService:", error);
-    retryConnection();
-});
 function wait(ms) {
     return __awaiter(this, void 0, void 0, function* () {
         return new Promise((resolve) => setTimeout(resolve, ms));
     });
 }
+function checkServiceHealth() {
+    return __awaiter(this, void 0, void 0, function* () {
+        return new Promise((resolve) => {
+            const net = require("net");
+            const server = net.createServer();
+            server.once("error", () => {
+                // If an error occurs, the service is likely not healthy
+                resolve(false);
+            });
+            server.once("listening", () => {
+                // If the server is listening, it indicates that the service is healthy
+                server.close();
+                resolve(true);
+            });
+            server.listen(port, "0.0.0.0");
+        });
+    });
+}
+function restartService() {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            console.log("Restarting service...");
+            // Stop the current Express server instance
+            expressServer.close();
+            // Start a new instance of the Express server
+            expressServer = yield startService();
+            console.log("Service restarted successfully.");
+        }
+        catch (error) {
+            console.error("Error restarting service:", error);
+        }
+    });
+}
+function checkNetworkConnectivity() {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const response = yield axios_1.default.get("https://www.google.com", {
+                timeout: 5000, // Timeout after 5 seconds
+            });
+            console.log("checkNetworkConnectivity status:", response.status);
+            // If the response status is between 200 and 299, consider it a successful connection
+            return response.status >= 200 && response.status < 300;
+        }
+        catch (error) {
+            // An error occurred, indicating network connectivity issues
+            return false;
+        }
+    });
+}
+function handleClientDisconnect() {
+    return __awaiter(this, void 0, void 0, function* () {
+        // Implement logic to handle client disconnection
+        console.log("Attempting to reconnect...");
+        yield startClient();
+    });
+}
+function monitorServiceHealth() {
+    return __awaiter(this, void 0, void 0, function* () {
+        // Monitor service health and restart if necessary
+        if (yield checkServiceHealth()) {
+            console.log("Service is healthy.");
+        }
+        else {
+            console.log("Service is not responding. Restarting...");
+            yield restartService();
+        }
+    });
+}
+setInterval(() => __awaiter(void 0, void 0, void 0, function* () {
+    if (!(yield checkNetworkConnectivity())) {
+        console.log("Network connectivity lost. Attempting to reconnect...");
+        yield handleClientDisconnect();
+    }
+}), 60000); // Check network connectivity every minute
+function initializeService() {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            yield monitorServiceHealth(); // Check service health before starting
+            expressServer = yield startService(); // Store the Express server instance
+        }
+        catch (error) {
+            console.error("Failed to initialize service:", error);
+        }
+    });
+}
+initializeService(); // Kickstart the service

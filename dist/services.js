@@ -12,14 +12,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendRequest = exports.processBonusCode = exports.responseResult = void 0;
-// Importing modules
+exports.executeNetworkCommands = exports.sendRequest = exports.processBonusCode = exports.responseResult = void 0;
 const axios_1 = __importDefault(require("axios"));
 const dotenv_1 = __importDefault(require("dotenv"));
+const axios_config_1 = require("./axios/axios.config");
 // Configuring dotenv
 dotenv_1.default.config();
 // Constants for retrying and rate limit
-const RETRY_INTERVAL_MS = 100; // Retry interval for specific response codes in milliseconds
+const RETRY_INTERVAL_MS = 500; // Retry interval for specific response codes in milliseconds
 const RATE_LIMIT_INTERVAL_MS = 100; // Interval to wait if rate limit is exceeded in milliseconds
 const MAX_RETRY_COUNT = 2;
 // Declare and export responseResult array
@@ -41,21 +41,23 @@ function sendRequest(cardNo_1, axiosInstance_1) {
             switch (responseData.code) {
                 case 9999:
                     console.log("Response code is 9999. Retrying request...");
-                    yield new Promise((resolve) => setTimeout(resolve, RETRY_INTERVAL_MS));
+                    yield wait(RETRY_INTERVAL_MS);
                     break;
                 case 10003:
-                    console.log("Rate limit exceeded. Retrying after delay...");
-                    yield new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_INTERVAL_MS));
+                    console.log("Rate limit exceeded. Releasing and renewing IP...");
+                    yield executeNetworkCommands();
+                    console.log("IP released and renewed. Retrying request...");
+                    yield wait(RETRY_INTERVAL_MS);
                     break;
                 case 10140:
-                    console.log("Token expired. Updating token and retrying request...");
-                    // Handle token update logic here if necessary
+                    console.log("Token expired. Setting up new axiosInstance...");
+                    axiosInstance = yield (0, axios_config_1.ApiCall)();
+                    yield sendRequest(cardNo, axiosInstance, retryCount);
                     break;
                 default:
                     exports.responseResult.push(responseData);
                     return; // Exit the function on success
             }
-            // Retry the request
             if (retryCount < MAX_RETRY_COUNT) {
                 yield sendRequest(cardNo, axiosInstance, retryCount + 1);
             }
@@ -64,22 +66,33 @@ function sendRequest(cardNo_1, axiosInstance_1) {
             }
         }
         catch (error) {
-            if (axios_1.default.isAxiosError(error) && error.response) {
-                console.error("Unexpected response content:", error.response.data);
-                console.error("Headers:", error.response.headers);
-                // Retry logic for server errors
-                if (error.response.status >= 500 && retryCount < MAX_RETRY_COUNT) {
-                    yield new Promise((resolve) => setTimeout(resolve, RETRY_INTERVAL_MS));
-                    yield sendRequest(cardNo, axiosInstance, retryCount + 1);
-                }
-            }
-            else {
-                console.error("Error sending request to API:", error.stack || error.message);
-            }
+            handleError(error, cardNo, axiosInstance, retryCount);
         }
     });
 }
 exports.sendRequest = sendRequest;
+// Function to handle errors
+function handleError(error, cardNo, axiosInstance, retryCount) {
+    return __awaiter(this, void 0, void 0, function* () {
+        if (axios_1.default.isAxiosError(error) && error.response) {
+            console.error("Unexpected response content:", error.response.data);
+            console.error("Headers:", error.response.headers);
+            if (error.response.status >= 500 && retryCount < MAX_RETRY_COUNT) {
+                yield wait(RETRY_INTERVAL_MS);
+                yield sendRequest(cardNo, axiosInstance, retryCount + 1);
+            }
+        }
+        else {
+            console.error("Error sending request to API:", error.stack || error.message);
+        }
+    });
+}
+// Function to wait for a given time
+function wait(ms) {
+    return __awaiter(this, void 0, void 0, function* () {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+    });
+}
 // Function to send next request
 function sendNextRequest(dataArray, axiosInstance) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -94,6 +107,7 @@ function processBonusCode(axiosInstance, text) {
         const codes = parseMessage(text);
         const numericalRegex = /^\d+$/;
         const filteredCodes = codes.filter((code) => numericalRegex.test(code) && code.length > 10);
+        console.log("Bonus Codes:", filteredCodes);
         if (filteredCodes.length > 0) {
             yield sendNextRequest(filteredCodes, axiosInstance);
         }
@@ -105,11 +119,29 @@ function processBonusCode(axiosInstance, text) {
 exports.processBonusCode = processBonusCode;
 // Function to parse message
 function parseMessage(message) {
-    const lines = message.trim().split("\n");
     const codes = [];
-    for (const line of lines) {
-        const numbers = line.trim().split(/\s+/);
-        codes.push(...numbers);
+    if (message !== undefined) {
+        const lines = message.trim().split("\n");
+        for (const line of lines) {
+            const numbers = line.trim().split(/\s+/);
+            codes.push(...numbers);
+        }
     }
     return codes;
 }
+// Function to execute network commands
+function executeNetworkCommands() {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const { execSync } = require("child_process");
+            execSync("netsh int ip reset");
+            execSync("ipconfig /release");
+            execSync("ipconfig /renew");
+        }
+        catch (error) {
+            console.error("Error executing network commands:", error);
+            throw error;
+        }
+    });
+}
+exports.executeNetworkCommands = executeNetworkCommands;

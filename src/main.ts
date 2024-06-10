@@ -5,7 +5,7 @@ import { TelegramClient } from "telegram";
 import { StringSession } from "telegram/sessions";
 import { NewMessage } from "telegram/events";
 import { NewMessageEvent } from "telegram/events/NewMessage";
-import axios, { AxiosInstance, AxiosError, AxiosResponse } from "axios";
+import axios, { AxiosInstance } from "axios";
 
 import { Api } from "telegram/tl";
 import { ApiCall } from "./axios/axios.config";
@@ -117,6 +117,10 @@ async function forwardNewMessages(axiosInstance: AxiosInstance) {
 
           console.log("Received message from channel ID:", channelIdAsString);
 
+          // Forward the message to the destination channel
+          console.log("Forwarding the message to the destination channel");
+          await forwardMessage(message, channelIdAsString);
+
           //Check if the message is from one of the source channels
           console.log(
             "Check if the message is from one of the source channels:",
@@ -131,10 +135,6 @@ async function forwardNewMessages(axiosInstance: AxiosInstance) {
             // Send responseResult to the destination channel
             await sendMessageToDestinationChannel();
           }
-
-          // Forward the message to the destination channel
-          console.log("Forwarding the message to the destination channel");
-          await forwardMessage(message, channelIdAsString);
         } else {
           console.log("Peer is not a channel, skipping this message.");
         }
@@ -293,8 +293,10 @@ async function startService() {
     app.get("/", (req: Request, res: Response) => {
       res.send(`
         <html>
+          <head><title>Telegram Forwarder Service</title></head>
           <body>
-            <h1>Bonus Code H25 Response</h1>
+            <h1>Telegram Forwarder Service</h1>
+            <p>Service is running and ready to forward messages.</p>
             <ul>
               ${responseResult
                 .map(
