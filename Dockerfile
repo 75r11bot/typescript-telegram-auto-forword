@@ -1,6 +1,9 @@
 # Use the official Node.js image as the base image
 FROM node:16
 
+ENV NODE_ENV=${NODE_ENV}
+
+
 # Set the working directory
 WORKDIR /usr/src/app
 
@@ -37,7 +40,7 @@ RUN npx playwright install
 COPY . .
 
 # Copy the sessions directory to the working directory
-COPY sessions ./sessions
+COPY sessions ./sessions/*
 
 # Build the application
 RUN yarn run build
@@ -46,7 +49,7 @@ RUN yarn run build
 EXPOSE 5000
 
 # Add the healthcheck
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 CMD curl -f http://localhost:5000/ || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 CMD curl -f ${BASE_URL} || exit 1
 
 # Command to run the application
 CMD [ "node", "dist/main.js" ]

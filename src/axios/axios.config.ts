@@ -2,13 +2,14 @@ import axios, { AxiosInstance, AxiosError, AxiosResponse } from "axios";
 import axiosRetry from "axios-retry";
 import moment from "moment";
 import { getH25Token } from "../utility";
+import { siteConfig } from "../sites.config";
 
 async function ApiCall(): Promise<AxiosInstance> {
   const siteId = "1451470260579512322";
   const siteCode = "ybaxcf-4";
   const platformType = "2";
-  const h25Username = process.env.H25_USER || "";
-  const h25Password = process.env.H25_PASSWORD || "";
+  const h25Username = siteConfig.h25User || "";
+  const h25Password = siteConfig.h25Password || "";
 
   const endpoints = [
     process.env.API_ENDPOINT_1,

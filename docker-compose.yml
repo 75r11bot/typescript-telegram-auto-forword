@@ -6,6 +6,7 @@ services:
     ports:
       - "5003:5000"
     environment:
+      - NODE_ENV=develop_docker
       - API_ID=${API_ID}
       - API_HASH=${API_HASH}
       - APP_YOUR_PHONE=${APP_YOUR_PHONE}
@@ -19,17 +20,15 @@ services:
       - API_ENDPOINT_3=${API_ENDPOINT_3}
       - API_ENDPOINT_4=${API_ENDPOINT_4}
       - PLATFORM_TYPE=${PLATFORM_TYPE}
-      - H25_USER=${H25_USER1}
-      - H25_PASSWORD=${H25_PASSWORD1}
       - DEVICE_CODE=${DEVICE_CODE}
       - SIGN=${SIGN}
-      - BOT_TOKEN=${DOCKER_BOT_TOKEN}
+      - BASE_URL=host.intanal.docker:5003
     volumes:
       - .:/usr/src/app
       - ./sessions:/usr/src/app/sessions
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:5003/ || exit 1"]
+      test: ["CMD-SHELL", "curl -f host.intanal.docker:5003/ || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

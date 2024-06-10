@@ -1,3 +1,5 @@
+//services.ts
+
 import axios, { AxiosInstance, AxiosResponse, AxiosError } from "axios";
 import dotenv from "dotenv";
 import { ApiCall } from "./axios/axios.config";
@@ -21,7 +23,24 @@ interface FormData {
   siteCode: string;
   cardNo: string;
 }
+interface ApiResponse {
+  code: number;
+  message: string;
+  details: {
+    orderNo?: string;
+  };
+}
 
+interface Summary {
+  success: {
+    count: number;
+    orders: string[];
+  };
+  failure: {
+    count: number;
+    details: { [message: string]: number };
+  };
+}
 // Function to send request
 async function sendRequest(
   cardNo: string,
@@ -170,5 +189,63 @@ function shuffleArray(array: any[]) {
   }
   return array;
 }
+
+async function getInput(prompt: string): Promise<string> {
+  return new Promise((resolve) => {
+    process.stdout.write(prompt);
+    process.stdin.once("data", (data) => resolve(data.toString().trim()));
+  });
+}
+
+function processH25Response(responses: ApiResponse[]): Summary {
+  const summary: Summary = {
+    success: {
+      count: 0,
+      orders: [],
+    },
+    failure: {
+      count: 0,
+      details: {},
+    },
+  };
+
+  responses.forEach((response) => {
+    if (response.code === 10000) {
+      summary.success.count += 1;
+      if (response.details && response.details.orderNo) {
+        summary.success.orders.push(response.details.orderNo);
+      }
+    } else {
+      summary.failure.count += 1;
+      if (!summary.failure.details[response.message]) {
+        summary.failure.details[response.message] = 0;
+      }
+      summary.failure.details[response.message] += 1;
+    }
+  });
+
+  return summary;
+}
+
+async function checkNetworkConnectivity(): Promise<boolean> {
+  try {
+    const response = await axios.get("https://www.google.com", {
+      timeout: 5000, // Timeout after 5 seconds
+    });
+    console.log("checkNetworkConnectivity status:", response.status);
+    // If the response status is between 200 and 299, consider it a successful connection
+    return response.status >= 200 && response.status < 300;
+  } catch (error) {
+    // An error occurred, indicating network connectivity issues
+    return false;
+  }
+}
 // Exporting functions without redeclaring responseResult
-export { processBonusCode, sendRequest, executeNetworkCommands };
+export {
+  processBonusCode,
+  sendRequest,
+  executeNetworkCommands,
+  getInput,
+  processH25Response,
+  checkNetworkConnectivity,
+};

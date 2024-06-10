@@ -1,3 +1,4 @@
+//main.ts
 import fs from "fs";
 import dotenv from "dotenv";
 import express, { Request, Response } from "express";
@@ -5,16 +6,20 @@ import { TelegramClient } from "telegram";
 import { StringSession } from "telegram/sessions";
 import { NewMessage } from "telegram/events";
 import { NewMessageEvent } from "telegram/events/NewMessage";
-import axios, { AxiosInstance } from "axios";
+import { AxiosInstance } from "axios";
 
 import { Api } from "telegram/tl";
 import { ApiCall } from "./axios/axios.config";
 import { bot } from "./bot";
+import { siteConfig } from "./sites.config";
 
 import {
   processBonusCode,
   executeNetworkCommands,
   responseResult,
+  getInput,
+  processH25Response,
+  checkNetworkConnectivity,
 } from "./services";
 import { Telegraf, Context } from "telegraf";
 import { Update } from "telegraf/typings/core/types/typegram";
@@ -32,8 +37,8 @@ const responesChannelId = process.env.RESPONSE_CHANNEL_ID || "";
 const phoneNumber = process.env.APP_YOUR_PHONE || "";
 const userPassword = process.env.APP_YOUR_PWD || "";
 const port = Number(process.env.PORT) || 5000;
-const sessionsDirectory = "./sessions";
-const sessionFilePath = `${sessionsDirectory}/session.txt`;
+const sessionsDirectory = siteConfig.sessionsDirectory;
+const sessionFilePath = siteConfig.sessionFileName;
 
 const MAX_RETRIES = 5;
 const INITIAL_RETRY_INTERVAL = 5000; // 5 seconds
@@ -43,35 +48,17 @@ if (!fs.existsSync(sessionsDirectory)) {
   fs.mkdirSync(sessionsDirectory);
 }
 
-const sessionString = fs.existsSync(sessionFilePath)
+let sessionClient = fs.existsSync(sessionFilePath)
   ? fs.readFileSync(sessionFilePath, "utf-8")
   : "";
 
 let client: TelegramClient;
 let axiosInstance: AxiosInstance;
 let expressServer: any; // Define a variable to store the Express server instance
-interface ApiResponse {
-  code: number;
-  message: string;
-  details: {
-    orderNo?: string;
-  };
-}
-
-interface Summary {
-  success: {
-    count: number;
-    orders: string[];
-  };
-  failure: {
-    count: number;
-    details: { [message: string]: number };
-  };
-}
 
 async function initializeClient() {
   client = new TelegramClient(
-    new StringSession(sessionString),
+    new StringSession(sessionClient),
     apiId,
     apiHash,
     {
@@ -95,13 +82,6 @@ async function handleTelegramError(error: Error) {
     console.log("Unhandled error, restarting client...");
     setTimeout(startClient, retryInterval);
   }
-}
-
-async function getInput(prompt: string): Promise<string> {
-  return new Promise((resolve) => {
-    process.stdout.write(prompt);
-    process.stdin.once("data", (data) => resolve(data.toString().trim()));
-  });
 }
 
 async function listChats() {
@@ -189,36 +169,6 @@ async function forwardMessage(message: any, channelId: string) {
       error
     );
   }
-}
-
-function processH25Response(responses: ApiResponse[]): Summary {
-  const summary: Summary = {
-    success: {
-      count: 0,
-      orders: [],
-    },
-    failure: {
-      count: 0,
-      details: {},
-    },
-  };
-
-  responses.forEach((response) => {
-    if (response.code === 10000) {
-      summary.success.count += 1;
-      if (response.details && response.details.orderNo) {
-        summary.success.orders.push(response.details.orderNo);
-      }
-    } else {
-      summary.failure.count += 1;
-      if (!summary.failure.details[response.message]) {
-        summary.failure.details[response.message] = 0;
-      }
-      summary.failure.details[response.message] += 1;
-    }
-  });
-
-  return summary;
 }
 
 async function sendMessageToDestinationChannel() {
@@ -322,10 +272,25 @@ async function botSendMessageToDestinationChannel(
   }
 }
 
-async function startClient() {
+async function startClient(sessionClient?: string) {
   try {
     if (!client) {
-      await initializeClient();
+      if (sessionClient) {
+        // Initialize client with the provided session client
+        client = new TelegramClient(
+          new StringSession(sessionClient),
+          apiId,
+          apiHash,
+          {
+            connectionRetries: 5,
+            timeout: 86400000, // 24 hours
+            useWSS: true,
+          }
+        );
+        console.log("Telegram client initialized with existing session.");
+      } else {
+        await initializeClient();
+      }
     }
 
     await client.start({
@@ -344,6 +309,15 @@ async function startClient() {
         }
       },
     });
+
+    console.log("Client login successful.");
+
+    if (!sessionClient) {
+      // Save session only if it's a new session
+      const savedSession = client.session.save();
+      fs.writeFileSync(sessionFilePath, savedSession, "utf-8");
+      console.log("Session saved to file.");
+    }
 
     const me = (await client.getEntity("me")) as Api.User;
     const displayName = [me.firstName, me.lastName].filter(Boolean).join(" ");
@@ -468,14 +442,13 @@ async function startService() {
       const message = ctx.message;
       if (message && message.caption !== undefined) {
         console.log("Bot received new message caption:", message.caption);
-        console.log("Bot Processing Bonus Codes Call Requests to H25");
         await processBonusCode(axiosInstance, message.caption);
       } else if (message && message.text !== undefined) {
         console.log("Bot received new message text:", message.text);
-        console.log("Bot Processing Bonus Codes Call Requests to H25");
       } else {
         console.log("Invalid message received:", message);
       }
+      console.log("Invalid message chat Id:", message.chat.id);
       // Ensure the message is not from the response channel before sending a response
       if (!responesChannelId.includes(message.chat.id)) {
         await botSendMessageToDestinationChannel(bot);
@@ -529,20 +502,6 @@ async function restartService() {
   }
 }
 
-async function checkNetworkConnectivity(): Promise<boolean> {
-  try {
-    const response = await axios.get("https://www.google.com", {
-      timeout: 5000, // Timeout after 5 seconds
-    });
-    console.log("checkNetworkConnectivity status:", response.status);
-    // If the response status is between 200 and 299, consider it a successful connection
-    return response.status >= 200 && response.status < 300;
-  } catch (error) {
-    // An error occurred, indicating network connectivity issues
-    return false;
-  }
-}
-
 async function handleClientDisconnect() {
   // Implement logic to handle client disconnection
   console.log("Attempting to reconnect...");
@@ -573,8 +532,33 @@ setInterval(async () => {
 
 async function initializeService() {
   try {
+    console.log("Initializing service...");
+
+    // Check if the session file exists
+    if (fs.existsSync(sessionFilePath)) {
+      console.log(`Session file found at ${sessionFilePath}.`);
+      sessionClient = fs.readFileSync(sessionFilePath, "utf-8");
+
+      if (sessionClient) {
+        console.log("Session client found. Using existing session.");
+        await startClient(sessionClient); // Start the client with the existing session
+      } else {
+        console.log(
+          "Session client not found. Starting client with new session."
+        );
+        await startClient(); // Start the client with a new session
+      }
+    } else {
+      console.log(
+        `Session file not found at ${sessionFilePath}. Starting client with new session.`
+      );
+      await startClient(); // Start the client with a new session
+    }
+
     await monitorServiceHealth(); // Check service health before starting
     expressServer = await startService(); // Store the Express server instance
+
+    console.log("Service initialized successfully.");
   } catch (error) {
     console.error("Failed to initialize service:", error);
   }

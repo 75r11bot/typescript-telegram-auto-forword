@@ -1,8 +1,7 @@
 import { Telegraf } from "telegraf";
-import dotenv from "dotenv";
-dotenv.config();
+import { siteConfig } from "./sites.config";
 
-const botToken = process.env.BOT_TOKEN || "";
+const botToken = siteConfig.botToken || "";
 
 const bot = new Telegraf(botToken);
 
