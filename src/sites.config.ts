@@ -14,7 +14,8 @@ const ENV_DEFAULT = "default";
 // Get the current environment from process.env or fallback to default
 const NODE_ENV = process.env.NODE_ENV || ENV_DEFAULT;
 const BASE_URL = process.env.BASE_URL || "";
-
+const h25User = process.env.H25_USER || "";
+const h25Password = process.env.H25_PASSWORD || "";
 // Define the site configuration based on the current environment
 let siteConfig: any;
 
@@ -25,8 +26,8 @@ switch (NODE_ENV) {
       siteName: "local-host",
       baseURL: BASE_URL,
       botToken: "6417397590:AAH8oGjlyhTEdxJCafrtSsPKRMJEBWbq3vI",
-      h25User: "manus9331",
-      h25Password: "manus9331",
+      h25User: h25User,
+      h25Password: h25Password,
       sessionsDirectory: "./sessions/local-host",
       sessionFileName: "./sessions/local-host/local_session.txt",
     };
@@ -37,8 +38,8 @@ switch (NODE_ENV) {
       siteName: "render-host",
       baseURL: BASE_URL,
       botToken: "7393640522:AAFZGg9Oj0v_BcfApffdYsdqAHU5PtkOHRw",
-      h25User: "noon75",
-      h25Password: "nnnn9331",
+      h25User: h25User,
+      h25Password: h25Password,
       sessionsDirectory: "./sessions/render-host",
       sessionFileName: "./sessions/render-host/render_session.txt",
     };
@@ -49,8 +50,8 @@ switch (NODE_ENV) {
       siteName: "docker-host",
       baseURL: BASE_URL,
       botToken: "7064883047:AAEzslnI5Qg66367WFpx0gBtt8ipA7Ev-AU",
-      h25User: "nus9331",
-      h25Password: "nnnn9331",
+      h25User: h25User,
+      h25Password: h25Password,
       sessionsDirectory: "./sessions/docker-host",
       sessionFileName: "./sessions/docker-host/docker_session.txt",
     };
@@ -61,8 +62,8 @@ switch (NODE_ENV) {
       siteName: "default-host",
       baseURL: BASE_URL,
       botToken: "6417397590:AAH8oGjlyhTEdxJCafrtSsPKRMJEBWbq3vI",
-      h25User: "noon75",
-      h25Password: "nnnn9331",
+      h25User: h25User,
+      h25Password: h25Password,
       sessionsDirectory: "./sessions/default-host",
       sessionFileName: "./sessions/default-host/default_session.txt",
     };
