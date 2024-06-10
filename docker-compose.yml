@@ -25,7 +25,7 @@ services:
       - BASE_URL=host.intanal.docker:5003
       - H25_USER=${H25_USER1}
       - H25_PASSWORD=${H25_PASSWORD1}
-      - H25_TOKEN=558914fd0e6f460ba911c9944c854f78
+      - H25_TOKEN=970e28d41f74463e94dd11c49d9c89ff
     volumes:
       - .:/usr/src/app
       - ./sessions:/usr/src/app/sessions
