@@ -97,7 +97,7 @@ async function getH25Token(user: string, password: string) {
     await browser.close();
   } catch (error) {
     console.error("Error occurred during browser operation:", error);
-    token = process.env.H25_TOKEN || "";
+    // token = process.env.H25_TOKEN || "";
   }
 
   if (token) {
