@@ -548,7 +548,6 @@ async function handleClientDisconnect() {
   console.log("Attempting to reconnect...");
   await startClient();
   console.log("startClient to restart...");
-
   if (!axiosInstance) {
     console.log("New Create axiosInstance");
     axiosInstance = await ApiCall();
