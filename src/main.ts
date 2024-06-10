@@ -477,9 +477,8 @@ async function startService() {
       } else {
         console.log("Invalid message received:", message);
       }
-
       // Ensure the message is not from the response channel before sending a response
-      if (!responesChannelId.includes(message.channel_id)) {
+      if (!responesChannelId.includes(message.message.chat.id)) {
         await botSendMessageToDestinationChannel(bot);
       }
     });
