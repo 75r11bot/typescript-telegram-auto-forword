@@ -156,23 +156,96 @@ function forwardMessage(message, channelId) {
         }
     });
 }
+function processH25Response(responses) {
+    const summary = {
+        success: {
+            count: 0,
+            orders: [],
+        },
+        failure: {
+            count: 0,
+            details: {},
+        },
+    };
+    responses.forEach((response) => {
+        if (response.code === 10000) {
+            summary.success.count += 1;
+            if (response.details && response.details.orderNo) {
+                summary.success.orders.push(response.details.orderNo);
+            }
+        }
+        else {
+            summary.failure.count += 1;
+            if (!summary.failure.details[response.message]) {
+                summary.failure.details[response.message] = 0;
+            }
+            summary.failure.details[response.message] += 1;
+        }
+    });
+    return summary;
+}
 function sendMessageToDestinationChannel() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
             const destinationEntity = yield client.getEntity(responesChannelId);
-            if (services_1.responseResult.length > 0) {
-                const formattedResponse = services_1.responseResult
+            const resultData = services_1.responseResult.result;
+            const username = services_1.responseResult.username;
+            const summaryData = processH25Response(resultData);
+            if (resultData.length > 0) {
+                const formattedResponse = resultData
                     .map((result, index) => {
                     return (`**Result ${index + 1}**\n` +
                         `Code: \`${result.code}\`\n` +
                         `Message: \`${result.message}\`\n` +
-                        `Details: \`${JSON.stringify(result.data, null, 2)}\`\n`);
+                        `Details: \`${JSON.stringify(result.details, null, 2)}\`\n`);
                 })
                     .join("\n");
-                const responseMessage = `Bonus Code H25 Response:\n${formattedResponse}`;
+                const summaryResponse = `Summary:\n` +
+                    `Success Count: ${summaryData.success.count}\n` +
+                    `Success Orders: ${summaryData.success.orders.join(", ")}\n` +
+                    `Failure Count: ${summaryData.failure.count}\n` +
+                    `Failure Details: ${Object.entries(summaryData.failure.details)
+                        .map(([message, count]) => `${message}: ${count}`)
+                        .join(", ")}`;
+                const responseMessage = `Bonus Code H25 Response User ${username}:\n${formattedResponse}\n\n${summaryResponse}`;
                 yield client.sendMessage(destinationEntity, {
                     message: responseMessage,
                     parseMode: "markdown",
+                });
+                console.log(`Response message sent to ${destinationChannelId}`);
+            }
+        }
+        catch (error) {
+            console.error(`Error sending response message to ${destinationChannelId}:`, error);
+        }
+    });
+}
+function botSendMessageToDestinationChannel(bot) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const destinationChannelId = responesChannelId;
+            const resultData = services_1.responseResult.result;
+            const username = services_1.responseResult.user; // Fixed typo from `responseResult.username` to `responseResult.user`
+            const summaryData = processH25Response(resultData);
+            if (resultData.length > 0) {
+                const formattedResponse = resultData
+                    .map((result, index) => {
+                    return (`**Result ${index + 1}**\n` +
+                        `Code: \`${result.code}\`\n` +
+                        `Message: \`${result.message}\`\n` +
+                        `Details: \`${JSON.stringify(result.details, null, 2)}\`\n`);
+                })
+                    .join("\n");
+                const summaryResponse = `Summary:\n` +
+                    `Success Count: ${summaryData.success.count}\n` +
+                    `Success Orders: ${summaryData.success.orders.join(", ")}\n` +
+                    `Failure Count: ${summaryData.failure.count}\n` +
+                    `Failure Details: ${Object.entries(summaryData.failure.details)
+                        .map(([message, count]) => `${message}: ${count}`)
+                        .join(", ")}`;
+                const responseMessage = `Bonus Code H25 Response User ${username}:\n${formattedResponse}\n\n${summaryResponse}`;
+                yield bot.telegram.sendMessage(destinationChannelId, responseMessage, {
+                    parse_mode: "Markdown",
                 });
                 console.log(`Response message sent to ${destinationChannelId}`);
             }
@@ -269,15 +342,40 @@ function startService() {
             const app = (0, express_1.default)();
             app.use(express_1.default.json());
             app.get("/", (req, res) => {
+                const resultData = services_1.responseResult.result;
+                const username = services_1.responseResult.username;
+                const summaryData = processH25Response(resultData); // Assuming you have access to this function
                 res.send(`
         <html>
           <head><title>Telegram Forwarder Service</title></head>
           <body>
             <h1>Telegram Forwarder Service</h1>
             <p>Service is running and ready to forward messages.</p>
+            <h2>Bonus Code H25 Response User ${username}</h2>
+            <h3>Summary</h3>
             <ul>
-              ${services_1.responseResult
-                    .map((result) => `<li>Code: ${result.code}, Message: ${result.message}</li>`)
+              <li>Success Count: ${summaryData.success.count}</li>
+              <li>Success Orders: ${summaryData.success.orders.join(", ")}</li>
+              <li>Failure Count: ${summaryData.failure.count}</li>
+              <li>Failure Details: 
+                <ul>
+                  ${Object.entries(summaryData.failure.details)
+                    .map(([message, count]) => `
+                    <li>${message}: ${count}</li>`)
+                    .join("")}
+                </ul>
+              </li>
+            </ul>
+            <h3>Individual Results</h3>
+            <ul>
+              ${resultData
+                    .map((result, index) => `
+                <li>
+                  <b>Result ${index + 1}</b><br>
+                  <b>Code:</b> ${result.code}<br>
+                  <b>Message:</b> ${result.message}<br>
+                  <b>Details:</b> ${JSON.stringify(result.details)}<br>
+                </li>`)
                     .join("")}
             </ul>
           </body>
@@ -297,19 +395,17 @@ function startService() {
                     // Bot Processing Bonus Codes Call Requests to H25
                     console.log("Bot Processing Bonus Codes Call Requests to H25");
                     yield (0, services_1.processBonusCode)(axiosInstance, message.caption);
-                    yield sendMessageToDestinationChannel();
                 }
                 else if (message && message.text !== undefined) {
                     // เพิ่มการตรวจสอบว่า message.text ไม่ได้เป็น undefined ก่อนที่จะเข้าถึง message.text
                     console.log("bot received new message text: ", message.text);
                     // Bot Processing Bonus Codes Call Requests to H25
                     console.log("Bot Processing Bonus Codes Call Requests to H25");
-                    yield (0, services_1.processBonusCode)(axiosInstance, message.text);
-                    yield sendMessageToDestinationChannel();
                 }
                 else {
                     console.log("Invalid message received:", message);
                 }
+                yield botSendMessageToDestinationChannel(bot_1.bot);
             }));
             return server; // Return the Express server instance
         }

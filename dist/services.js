@@ -22,11 +22,12 @@ dotenv_1.default.config();
 const RETRY_INTERVAL_MS = 500; // Retry interval for specific response codes in milliseconds
 const RATE_LIMIT_INTERVAL_MS = 100; // Interval to wait if rate limit is exceeded in milliseconds
 const MAX_RETRY_COUNT = 2;
-// Declare and export responseResult array
-exports.responseResult = [];
+// Declare and export responseResult object
+exports.responseResult = { user: "", result: [] };
 // Function to send request
 function sendRequest(cardNo_1, axiosInstance_1) {
     return __awaiter(this, arguments, void 0, function* (cardNo, axiosInstance, retryCount = 0) {
+        var _a;
         const formData = {
             platformType: process.env.PLATFORM_TYPE || "2",
             isCancelDiscount: "F",
@@ -35,6 +36,8 @@ function sendRequest(cardNo_1, axiosInstance_1) {
             cardNo: cardNo,
         };
         try {
+            // Capture the username from axiosInstance params
+            exports.responseResult.user = ((_a = axiosInstance.defaults.params) === null || _a === void 0 ? void 0 : _a.username) || "";
             const response = yield axiosInstance.post(`/cash/v/pay/generatePayCardV2`, formData);
             const responseData = response.data;
             console.log("Response Body:", responseData);
@@ -55,7 +58,7 @@ function sendRequest(cardNo_1, axiosInstance_1) {
                     yield sendRequest(cardNo, axiosInstance, retryCount);
                     break;
                 default:
-                    exports.responseResult.push(responseData);
+                    exports.responseResult.result.push(responseData);
                     return; // Exit the function on success
             }
             if (retryCount < MAX_RETRY_COUNT) {
@@ -66,7 +69,7 @@ function sendRequest(cardNo_1, axiosInstance_1) {
             }
         }
         catch (error) {
-            handleError(error, cardNo, axiosInstance, retryCount);
+            yield handleError(error, cardNo, axiosInstance, retryCount);
         }
     });
 }

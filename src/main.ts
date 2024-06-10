@@ -16,6 +16,8 @@ import {
   executeNetworkCommands,
   responseResult,
 } from "./services";
+import { Telegraf, Context } from "telegraf";
+import { Update } from "telegraf/typings/core/types/typegram";
 
 dotenv.config();
 
@@ -190,7 +192,7 @@ async function forwardMessage(message: any, channelId: string) {
   }
 }
 
-async function processH25Response(responses: ApiResponse[]): Promise<Summary> {
+function processH25Response(responses: ApiResponse[]): Summary {
   const summary: Summary = {
     success: {
       count: 0,
@@ -225,7 +227,7 @@ async function sendMessageToDestinationChannel() {
     const destinationEntity = await client.getEntity(responesChannelId);
     const resultData = responseResult.result;
     const username = responseResult.username;
-    let summaryData = processH25Response(resultData);
+    const summaryData = processH25Response(resultData);
 
     if (resultData.length > 0) {
       const formattedResponse = resultData
@@ -246,10 +248,10 @@ async function sendMessageToDestinationChannel() {
 
       const summaryResponse =
         `Summary:\n` +
-        `Success Count: ${(await summaryData).success.count}\n` +
-        `Success Orders: ${(await summaryData).success.orders.join(", ")}\n` +
-        `Failure Count: ${(await summaryData).failure.count}\n` +
-        `Failure Details: ${Object.entries((await summaryData).failure.details)
+        `Success Count: ${summaryData.success.count}\n` +
+        `Success Orders: ${summaryData.success.orders.join(", ")}\n` +
+        `Failure Count: ${summaryData.failure.count}\n` +
+        `Failure Details: ${Object.entries(summaryData.failure.details)
           .map(([message, count]) => `${message}: ${count}`)
           .join(", ")}`;
 
@@ -258,6 +260,57 @@ async function sendMessageToDestinationChannel() {
       await client.sendMessage(destinationEntity, {
         message: responseMessage,
         parseMode: "markdown",
+      });
+
+      console.log(`Response message sent to ${destinationChannelId}`);
+    }
+  } catch (error) {
+    console.error(
+      `Error sending response message to ${destinationChannelId}:`,
+      error
+    );
+  }
+}
+
+async function botSendMessageToDestinationChannel(
+  bot: Telegraf<Context<Update>>
+) {
+  try {
+    const destinationChannelId = responesChannelId;
+    const resultData = responseResult.result;
+    const username = responseResult.user; // Fixed typo from `responseResult.username` to `responseResult.user`
+    const summaryData = processH25Response(resultData);
+
+    if (resultData.length > 0) {
+      const formattedResponse = resultData
+        .map(
+          (
+            result: { code: any; message: any; details: any },
+            index: number
+          ) => {
+            return (
+              `**Result ${index + 1}**\n` +
+              `Code: \`${result.code}\`\n` +
+              `Message: \`${result.message}\`\n` +
+              `Details: \`${JSON.stringify(result.details, null, 2)}\`\n`
+            );
+          }
+        )
+        .join("\n");
+
+      const summaryResponse =
+        `Summary:\n` +
+        `Success Count: ${summaryData.success.count}\n` +
+        `Success Orders: ${summaryData.success.orders.join(", ")}\n` +
+        `Failure Count: ${summaryData.failure.count}\n` +
+        `Failure Details: ${Object.entries(summaryData.failure.details)
+          .map(([message, count]) => `${message}: ${count}`)
+          .join(", ")}`;
+
+      const responseMessage = `Bonus Code H25 Response User ${username}:\n${formattedResponse}\n\n${summaryResponse}`;
+
+      await bot.telegram.sendMessage(destinationChannelId, responseMessage, {
+        parse_mode: "Markdown",
       });
 
       console.log(`Response message sent to ${destinationChannelId}`);
@@ -358,18 +411,45 @@ async function startService() {
     app.get("/", (req: Request, res: Response) => {
       const resultData = responseResult.result;
       const username = responseResult.username;
+      const summaryData = processH25Response(resultData); // Assuming you have access to this function
+
       res.send(`
         <html>
           <head><title>Telegram Forwarder Service</title></head>
           <body>
             <h1>Telegram Forwarder Service</h1>
             <p>Service is running and ready to forward messages.</p>
-            <h1>โค้ดโบนัสฟรี ${username}</h1>
+            <h2>Bonus Code H25 Response User ${username}</h2>
+            <h3>Summary</h3>
+            <ul>
+              <li>Success Count: ${summaryData.success.count}</li>
+              <li>Success Orders: ${summaryData.success.orders.join(", ")}</li>
+              <li>Failure Count: ${summaryData.failure.count}</li>
+              <li>Failure Details: 
+                <ul>
+                  ${Object.entries(summaryData.failure.details)
+                    .map(
+                      ([message, count]) => `
+                    <li>${message}: ${count}</li>`
+                    )
+                    .join("")}
+                </ul>
+              </li>
+            </ul>
+            <h3>Individual Results</h3>
             <ul>
               ${resultData
                 .map(
-                  (result: { code: any; message: any }) =>
-                    `<li>Code: ${result.code}, Message: ${result.message}</li>`
+                  (
+                    result: { code: any; message: any; details: any },
+                    index: number
+                  ) => `
+                <li>
+                  <b>Result ${index + 1}</b><br>
+                  <b>Code:</b> ${result.code}<br>
+                  <b>Message:</b> ${result.message}<br>
+                  <b>Details:</b> ${JSON.stringify(result.details)}<br>
+                </li>`
                 )
                 .join("")}
             </ul>
@@ -393,17 +473,16 @@ async function startService() {
         // Bot Processing Bonus Codes Call Requests to H25
         console.log("Bot Processing Bonus Codes Call Requests to H25");
         await processBonusCode(axiosInstance, message.caption);
-        await sendMessageToDestinationChannel();
       } else if (message && message.text !== undefined) {
         // เพิ่มการตรวจสอบว่า message.text ไม่ได้เป็น undefined ก่อนที่จะเข้าถึง message.text
         console.log("bot received new message text: ", message.text);
         // Bot Processing Bonus Codes Call Requests to H25
         console.log("Bot Processing Bonus Codes Call Requests to H25");
-        await processBonusCode(axiosInstance, message.text);
-        await sendMessageToDestinationChannel();
       } else {
         console.log("Invalid message received:", message);
       }
+
+      await botSendMessageToDestinationChannel(bot);
     });
 
     return server; // Return the Express server instance
