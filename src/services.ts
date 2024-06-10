@@ -3,6 +3,7 @@
 import axios, { AxiosInstance, AxiosResponse, AxiosError } from "axios";
 import dotenv from "dotenv";
 import { ApiCall } from "./axios/axios.config";
+import { siteConfig } from "./sites.config";
 
 // Configuring dotenv
 dotenv.config();
@@ -11,9 +12,10 @@ dotenv.config();
 const RETRY_INTERVAL_MS = 500; // Retry interval for specific response codes in milliseconds
 const RATE_LIMIT_INTERVAL_MS = 100; // Interval to wait if rate limit is exceeded in milliseconds
 const MAX_RETRY_COUNT = 2;
+const h25Username = siteConfig.h25User || "";
 
 // Declare and export responseResult object
-export const responseResult: any = { user: "", result: [] };
+export const responseResult: any = { username: h25Username, result: [] };
 
 // Interface for form data
 interface FormData {
@@ -57,7 +59,7 @@ async function sendRequest(
 
   try {
     // Capture the username from axiosInstance params
-    responseResult.user = axiosInstance.defaults.params?.username || "";
+    responseResult.username = h25Username || "";
 
     const response: AxiosResponse = await axiosInstance.post(
       `/cash/v/pay/generatePayCardV2`,

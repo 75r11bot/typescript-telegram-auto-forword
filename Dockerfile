@@ -51,5 +51,9 @@ EXPOSE 5000
 # Add the healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 CMD curl -f ${BASE_URL} || exit 1
 
+
+VOLUME /usr/src/app
+VOLUME /usr/src/app/sessions
+
 # Command to run the application
 CMD [ "node", "dist/main.js" ]

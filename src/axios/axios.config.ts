@@ -76,9 +76,6 @@ async function ApiCall(): Promise<AxiosInstance> {
       const axiosInstance = axios.create({
         baseURL: endpoint,
         headers: headers,
-        params: {
-          username: h25Username,
-        },
       });
 
       const url = `/v/user/refreshUserFund?siteId=${siteId}&siteCode=${siteCode}&platformType=${platformType}`;
