@@ -1,12 +1,10 @@
 # Use the official Node.js image as the base image
 FROM node:16
 
-
 # Set the working directory
 WORKDIR /usr/src/app
 
-
-# Install dependencies
+# Install dependencies and required libraries
 RUN apt-get update && \
     apt-get install -y \
     libnss3 \
@@ -23,7 +21,8 @@ RUN apt-get update && \
     libxrandr2 \
     libgbm1 \
     libxkbcommon0 \
-    libasound2 && \
+    libasound2 \
+    curl && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy package.json and yarn.lock files to the working directory
@@ -38,8 +37,11 @@ RUN npx playwright install
 # Copy the rest of the application files to the working directory
 COPY . .
 
+# Ensure the sessions directory exists
+RUN mkdir -p ./sessions
+
 # Copy the sessions directory to the working directory
-COPY sessions ./sessions/*
+COPY sessions ./sessions
 
 # Build the application
 RUN yarn run build
@@ -47,15 +49,16 @@ RUN yarn run build
 # Expose the port the app runs on
 EXPOSE 5000
 
-ENV NODE_ENV=production
+# Set environment variables with default values
+# ENV NODE_ENV=${NODE_ENV:-production}
+# ENV BASE_URL=${BASE_URL:-https://typescript-telegram-auto-forward.onrender.com}
 
+
+ENV NODE_ENV=${NODE_ENV:-develop_docker}
+ENV BASE_URL=${BASE_URL:-http://localhost:5003}
 
 # Add the healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 CMD curl -f ${BASE_URL} || exit 1
 
-
-VOLUME /usr/src/app
-VOLUME /usr/src/app/sessions
-
 # Command to run the application
-CMD [ "node", "dist/main.js" ]
+CMD ["node", "dist/main.js"]
