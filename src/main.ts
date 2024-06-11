@@ -87,7 +87,6 @@ async function handleTelegramError(error: Error) {
 async function listChats() {
   try {
     console.log("Calling listChats...");
-    await startClient();
 
     const dialogs = await client.getDialogs();
 
