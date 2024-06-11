@@ -442,7 +442,7 @@ async function startService() {
       `);
     });
 
-    const server = app.listen(port, () => {
+    expressServer = app.listen(port, () => {
       console.log(`Server listening on port ${port}`);
     });
 
@@ -467,7 +467,7 @@ async function startService() {
       }
     });
 
-    return server; // Return the Express server instance
+    return expressServer; // Return the Express server instance
   } catch (error) {
     console.error("Service initialization error:", error);
     handleTelegramError(error as Error); // Use type assertion
