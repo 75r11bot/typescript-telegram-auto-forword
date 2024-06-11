@@ -100,8 +100,7 @@ async function loginAndCaptureResponse(
 
     // Wait for the verify code to be extracted before filling it in
     if (verifyCode) {
-      await 
-      .getByRole("textbox").nth(4).fill(verifyCode);
+      await iframe.getByRole("textbox").nth(4).fill(verifyCode);
     }
 
     // Toggle the "Remember me" checkbox
@@ -116,8 +115,8 @@ async function loginAndCaptureResponse(
       .getByRole("button", { name: "ลงชื่อเข้าใช้", exact: true })
       .click();
     await page.waitForTimeout(5000); // Wait for 5 seconds
-    
-      // Wait for the iframe to load
+
+    // Wait for the iframe to load
     const frame = page.frame({ name: "iframe" });
     if (frame) {
       await frame.waitForLoadState("domcontentloaded");
