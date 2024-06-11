@@ -387,6 +387,11 @@ async function startService() {
     const app = express();
     app.use(express.json());
 
+    // Health check endpoint
+    app.get("/health", (req: Request, res: Response) => {
+      res.status(200).send("OK");
+    });
+
     app.get("/", (req: Request, res: Response) => {
       const resultData = responseResult.result;
       const username = responseResult.username;
@@ -448,13 +453,14 @@ async function startService() {
       const message = ctx.message;
       if (message && message.caption !== undefined) {
         console.log("Bot received new message caption:", message.caption);
+        console.log("Bot Processing Bonus Codes Call Requests to H25");
         await processBonusCode(axiosInstance, message.caption);
       } else if (message && message.text !== undefined) {
         console.log("Bot received new message text:", message.text);
+        console.log("Bot Processing Bonus Codes Call Requests to H25");
       } else {
         console.log("Invalid message received:", message);
       }
-      console.log("Invalid message chat Id:", message.chat.id);
       // Ensure the message is not from the response channel before sending a response
       if (!responesChannelId.includes(message.chat.id)) {
         await botSendMessageToDestinationChannel(bot);
