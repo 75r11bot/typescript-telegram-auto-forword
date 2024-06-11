@@ -42,7 +42,11 @@ async function loginAndCaptureResponse(
   page: Page,
   user: string,
   password: string
-): Promise<{ token: string | null; payload: any | null }> {
+): Promise<{
+  verifyCode: any;
+  token: string | null;
+  payload: any | null;
+}> {
   let token: string | null = null;
   let verifyCode: string | null = null;
   let loginPayload: any | null = null;
@@ -141,12 +145,13 @@ async function loginAndCaptureResponse(
     console.error("Error occurred during login:", error);
   }
 
-  return { token, payload: loginPayload };
+  return { token, payload: loginPayload, verifyCode };
 }
 
 async function getH25Token(user: string, password: string) {
   let token: string | null = null;
   let payload: any | null = null;
+  let verify: any | null = null;
 
   try {
     const browser = await chromium.launch({
@@ -158,7 +163,7 @@ async function getH25Token(user: string, password: string) {
     const result = await loginAndCaptureResponse(page, user, password);
     token = result.token;
     payload = result.payload;
-
+    verify = result.verifyCode;
     if (!token) {
       console.log("Token not found. Retrying login after 5 seconds...");
       await page.close();
@@ -180,17 +185,17 @@ async function getH25Token(user: string, password: string) {
   } else {
     console.log("Token not found after retry.");
     console.log("Payload:", payload);
-    token = await getH25TokenRequest(payload);
+    token = await getH25TokenRequest(payload, verify);
   }
 
   return token;
 }
 
-async function getH25TokenRequest(loginPayload: any) {
+async function getH25TokenRequest(loginPayload: any, verify: any) {
   const formData = new FormData();
   Object.keys(loginPayload).forEach((key) => {
     if (key === "verifyCode") {
-      formData.append(key, "");
+      formData.append(key, verify);
     } else {
       formData.append(key, loginPayload[key]);
     }

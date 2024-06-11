@@ -274,6 +274,10 @@ async function botSendMessageToDestinationChannel(
 
 async function startClient(sessionClient?: string) {
   try {
+    if (!axiosInstance) {
+      axiosInstance = await ApiCall();
+    }
+
     if (!client) {
       if (sessionClient) {
         // Initialize client with the provided session client
