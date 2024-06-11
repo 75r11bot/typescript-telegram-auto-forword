@@ -234,7 +234,7 @@ async function checkNetworkConnectivity(): Promise<boolean> {
     const response = await axios.get("https://www.google.com", {
       timeout: 5000, // Timeout after 5 seconds
     });
-    console.log("checkNetworkConnectivity status:", response.status);
+    // console.log("checkNetworkConnectivity status:", response.status);
     // If the response status is between 200 and 299, consider it a successful connection
     return response.status >= 200 && response.status < 300;
   } catch (error) {

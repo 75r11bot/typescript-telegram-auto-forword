@@ -275,23 +275,23 @@ async function startClient(sessionClient?: string) {
       axiosInstance = await ApiCall();
     }
 
+    let session = "";
+
+    if (fs.existsSync(sessionFilePath)) {
+      session = fs.readFileSync(sessionFilePath, "utf-8");
+      console.log("Session file found and read.");
+    } else if (sessionClient) {
+      session = sessionClient;
+      console.log("Using provided session client.");
+    }
+
     if (!client) {
-      if (sessionClient) {
-        // Initialize client with the provided session client
-        client = new TelegramClient(
-          new StringSession(sessionClient),
-          apiId,
-          apiHash,
-          {
-            connectionRetries: 5,
-            timeout: 86400000, // 24 hours
-            useWSS: true,
-          }
-        );
-        console.log("Telegram client initialized with existing session.");
-      } else {
-        await initializeClient();
-      }
+      client = new TelegramClient(new StringSession(session), apiId, apiHash, {
+        connectionRetries: 5,
+        timeout: 86400000, // 24 hours
+        useWSS: true,
+      });
+      console.log("Telegram client initialized.");
     }
 
     await client.start({
@@ -313,7 +313,7 @@ async function startClient(sessionClient?: string) {
 
     console.log("Client login successful.");
 
-    if (!sessionClient) {
+    if (!fs.existsSync(sessionFilePath)) {
       // Save session only if it's a new session
       const savedSession = client.session.save();
       if (typeof savedSession === "string") {
@@ -327,8 +327,10 @@ async function startClient(sessionClient?: string) {
     const me = (await client.getEntity("me")) as Api.User;
     const displayName = [me.firstName, me.lastName].filter(Boolean).join(" ");
     console.log(`Signed in successfully as ${displayName}`);
+
     await listChats();
     await forwardNewMessages(axiosInstance);
+
     bot.on("message", async (ctx: { message: any }) => {
       const message = ctx.message;
       if (message && message.caption !== undefined) {
@@ -341,7 +343,6 @@ async function startClient(sessionClient?: string) {
       } else {
         console.log("Invalid message received:", message);
       }
-      // Ensure the message is not from the response channel before sending a response
       if (!responesChannelId.includes(message.chat.id)) {
         await botSendMessageToDestinationChannel(bot);
       }
