@@ -41,7 +41,7 @@ const sessionsDirectory = siteConfig.sessionsDirectory;
 const sessionFilePath = siteConfig.sessionFileName;
 
 const MAX_RETRIES = 5;
-const INITIAL_RETRY_INTERVAL = 5000; // 5 seconds
+const INITIAL_RETRY_INTERVAL = 6000; // 5 seconds
 let retryInterval = INITIAL_RETRY_INTERVAL;
 
 if (!fs.existsSync(sessionsDirectory)) {
@@ -391,8 +391,7 @@ async function retryConnection() {
   if (!connected) {
     console.error("Max retries reached. Unable to restart service. Exiting...");
     try {
-      await executeNetworkCommands();
-      // restartDockerContainer();
+      await restartService();
     } catch (error) {
       console.error("Error restarting Docker container:", error);
     }
