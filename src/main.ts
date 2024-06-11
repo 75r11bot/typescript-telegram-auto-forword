@@ -187,15 +187,12 @@ async function sendMessageToDestinationChannel() {
     if (resultData.length > 0) {
       const formattedResponse = resultData
         .map(
-          (
-            result: { code: any; message: any; details: any },
-            index: number
-          ) => {
+          (result: { code: any; message: any; data: any }, index: number) => {
             return (
               `**Result ${index + 1}**\n` +
               `Code: \`${result.code}\`\n` +
               `Message: \`${result.message}\`\n` +
-              `Details: \`${JSON.stringify(result.details, null, 2)}\`\n`
+              `Details: \`${JSON.stringify(result.data, null, 2)}\`\n`
             );
           }
         )
@@ -239,15 +236,12 @@ async function botSendMessageToDestinationChannel(
     if (resultData.length > 0) {
       const formattedResponse = resultData
         .map(
-          (
-            result: { code: any; message: any; details: any },
-            index: number
-          ) => {
+          (result: { code: any; message: any; data: any }, index: number) => {
             return (
               `**Result ${index + 1}**\n` +
               `Code: \`${result.code}\`\n` +
               `Message: \`${result.message}\`\n` +
-              `Details: \`${JSON.stringify(result.details, null, 2)}\`\n`
+              `Details: \`${JSON.stringify(result.data, null, 2)}\`\n`
             );
           }
         )
@@ -429,14 +423,14 @@ async function startService() {
               ${resultData
                 .map(
                   (
-                    result: { code: any; message: any; details: any },
+                    result: { code: any; message: any; data: any },
                     index: number
                   ) => `
                 <li>
                   <b>Result ${index + 1}</b><br>
                   <b>Code:</b> ${result.code}<br>
                   <b>Message:</b> ${result.message}<br>
-                  <b>Details:</b> ${JSON.stringify(result.details)}<br>
+                  <b>Details:</b> ${JSON.stringify(result.data)}<br>
                 </li>`
                 )
                 .join("")}

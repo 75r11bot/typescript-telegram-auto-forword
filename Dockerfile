@@ -6,7 +6,6 @@ FROM node:16
 WORKDIR /usr/src/app
 
 
-
 # Install dependencies
 RUN apt-get update && \
     apt-get install -y \
@@ -48,7 +47,7 @@ RUN yarn run build
 # Expose the port the app runs on
 EXPOSE 5000
 
-ENV NODE_ENV=${NODE_ENV}
+ENV NODE_ENV=production
 
 
 # Add the healthcheck
