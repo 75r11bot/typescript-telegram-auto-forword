@@ -23,9 +23,8 @@ services:
       - DEVICE_CODE=${DEVICE_CODE}
       - SIGN=${SIGN}
       - BASE_URL=host.intanal.docker:5003
-      - H25_USER=${H25_USER1}
-      - H25_PASSWORD=${H25_PASSWORD1}
-      - H25_TOKEN=970e28d41f74463e94dd11c49d9c89ff
+      - H25_USER=manus9331
+      - H25_PASSWORD=manus9331
     volumes:
       - .:/usr/src/app
       - ./sessions:/usr/src/app/sessions

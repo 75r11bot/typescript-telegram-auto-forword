@@ -1,7 +1,6 @@
 import { Page, chromium } from "playwright";
 import dotenv from "dotenv";
 import fs from "fs";
-
 dotenv.config();
 
 import { createWorker as tesseractCreateWorker, Worker } from "tesseract.js";
@@ -46,8 +45,8 @@ async function loginAndCaptureResponse(
   let verifyCode: string | null = null;
 
   try {
-    // Navigate to the login page
-    await page.goto("https://75rapp.com/client.html");
+    // Navigate to the login page with a longer timeout
+    await page.goto("https://75rapp.com/client.html", { timeout: 60000 }); // 60 seconds
 
     // Interception for API responses
     page.on("response", async (response) => {
@@ -97,7 +96,7 @@ async function loginAndCaptureResponse(
         name: "รหัสผ่าน (ตัวอักษรคำนึงถึงตัวพิมพ์เล็กและใหญ่)",
       })
       .fill(password);
-    await page.waitForTimeout(3000); // Wait for 5 seconds
+    await page.waitForTimeout(3000); // Wait for 3 seconds
 
     // Wait for the verify code to be extracted before filling it in
     if (verifyCode) {

@@ -6,9 +6,6 @@ FROM node:16
 WORKDIR /usr/src/app
 
 
-# Copy the package.json and package-lock.json
-COPY package*.json ./
-
 
 # Install dependencies
 RUN apt-get update && \
