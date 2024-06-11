@@ -50,12 +50,12 @@ RUN yarn run build
 EXPOSE 5000
 
 # # Set environment variables with default values
-ENV NODE_ENV=${NODE_ENV:-production}
-ENV BASE_URL=${BASE_URL:-https://typescript-telegram-auto-forward.onrender.com}
+# ENV NODE_ENV=${NODE_ENV:-production}
+# ENV BASE_URL=${BASE_URL:-https://typescript-telegram-auto-forward.onrender.com}
 
 
-# ENV NODE_ENV=${NODE_ENV:-develop_docker}
-# ENV BASE_URL=${BASE_URL:-http://localhost:5003}
+ENV NODE_ENV=${NODE_ENV:-develop_docker}
+ENV BASE_URL=${BASE_URL:-http://localhost:5003}
 
 # Add the healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 CMD curl -f ${BASE_URL} || exit 1
