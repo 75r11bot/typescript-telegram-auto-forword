@@ -1,4 +1,3 @@
-//main.ts
 import fs from "fs";
 import dotenv from "dotenv";
 import express, { Request, Response } from "express";
@@ -15,7 +14,6 @@ import { siteConfig } from "./sites.config";
 
 import {
   processBonusCode,
-  executeNetworkCommands,
   responseResult,
   getInput,
   processH25Response,
