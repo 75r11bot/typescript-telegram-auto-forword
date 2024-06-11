@@ -5,6 +5,10 @@ FROM node:16
 # Set the working directory
 WORKDIR /usr/src/app
 
+
+# Copy the package.json and package-lock.json
+COPY package*.json ./
+
 # Install dependencies
 RUN apt-get update && \
     apt-get install -y \
