@@ -330,6 +330,30 @@ async function startClient(sessionClient?: string) {
     const me = (await client.getEntity("me")) as Api.User;
     const displayName = [me.firstName, me.lastName].filter(Boolean).join(" ");
     console.log(`Signed in successfully as ${displayName}`);
+    await listChats();
+    await forwardNewMessages(axiosInstance);
+    bot.on("message", async (ctx: { message: any }) => {
+      const message = ctx.message;
+      if (message && message.caption !== undefined) {
+        console.log("Bot received new message caption:", message.caption);
+        console.log("Bot Processing Bonus Codes Call Requests to H25");
+        await processBonusCode(axiosInstance, message.caption);
+      } else if (message && message.text !== undefined) {
+        console.log("Bot received new message text:", message.text);
+        console.log("Bot Processing Bonus Codes Call Requests to H25");
+      } else {
+        console.log("Invalid message received:", message);
+      }
+      // Ensure the message is not from the response channel before sending a response
+      if (!responesChannelId.includes(message.chat.id)) {
+        await botSendMessageToDestinationChannel(bot);
+      }
+    });
+
+    bot
+      .launch()
+      .then(() => console.log("Bot started"))
+      .catch((err: any) => console.error("Error starting bot:", err));
   } catch (error) {
     console.error("Failed to start client:", error);
     await retryConnection();
@@ -448,27 +472,6 @@ async function startService() {
       console.log(`Server listening on port ${port}`);
     });
 
-    await listChats();
-    await forwardNewMessages(axiosInstance);
-
-    bot.on("message", async (ctx: { message: any }) => {
-      const message = ctx.message;
-      if (message && message.caption !== undefined) {
-        console.log("Bot received new message caption:", message.caption);
-        console.log("Bot Processing Bonus Codes Call Requests to H25");
-        await processBonusCode(axiosInstance, message.caption);
-      } else if (message && message.text !== undefined) {
-        console.log("Bot received new message text:", message.text);
-        console.log("Bot Processing Bonus Codes Call Requests to H25");
-      } else {
-        console.log("Invalid message received:", message);
-      }
-      // Ensure the message is not from the response channel before sending a response
-      if (!responesChannelId.includes(message.chat.id)) {
-        await botSendMessageToDestinationChannel(bot);
-      }
-    });
-
     return expressServer; // Return the Express server instance
   } catch (error) {
     console.error("Service initialization error:", error);
@@ -520,11 +523,6 @@ async function handleClientDisconnect() {
   // Implement logic to handle client disconnection
   console.log("Attempting to reconnect...");
   await startClient();
-  console.log("startClient to restart...");
-  if (!axiosInstance) {
-    console.log("New Create axiosInstance");
-    axiosInstance = await ApiCall();
-  }
 }
 
 async function monitorServiceHealth() {
