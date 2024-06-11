@@ -55,6 +55,7 @@ async function loginAndCaptureResponse(
       .frameLocator("#iframe")
       .getByRole("button", { name: "ลงชื่อเข้าใช้", exact: true })
       .click();
+    await page.waitForTimeout(5000); // Wait for 5 seconds
 
     // Wait for the iframe to load
     const frame = page.frame({ name: "iframe" });
