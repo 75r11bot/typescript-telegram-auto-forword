@@ -1,10 +1,7 @@
 # Use the official Node.js image as the base image
 FROM node:16
 
-<<<<<<< HEAD
-=======
 
->>>>>>> render-deploy
 # Set the working directory
 WORKDIR /usr/src/app
 
@@ -12,10 +9,7 @@ WORKDIR /usr/src/app
 # Copy the package.json and package-lock.json
 COPY package*.json ./
 
-<<<<<<< HEAD
 
-=======
->>>>>>> render-deploy
 # Install dependencies
 RUN apt-get update && \
     apt-get install -y \
@@ -57,12 +51,8 @@ RUN yarn run build
 # Expose the port the app runs on
 EXPOSE 5000
 
-<<<<<<< HEAD
 ENV NODE_ENV=${NODE_ENV}
-=======
-# ENV NODE_ENV=${NODE_ENV}
-ENV NODE_ENV="production"
->>>>>>> render-deploy
+
 
 # Add the healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 CMD curl -f ${BASE_URL} || exit 1
