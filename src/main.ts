@@ -321,8 +321,12 @@ async function startClient(sessionClient?: string) {
     if (!sessionClient) {
       // Save session only if it's a new session
       const savedSession = client.session.save();
-      fs.writeFileSync(sessionFilePath, savedSession, "utf-8");
-      console.log("Session saved to file.");
+      if (typeof savedSession === "string") {
+        fs.writeFileSync(sessionFilePath, savedSession, "utf-8");
+        console.log("Session saved to file.");
+      } else {
+        console.error("Failed to save session: Session is not a string");
+      }
     }
 
     const me = (await client.getEntity("me")) as Api.User;
