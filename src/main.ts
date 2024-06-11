@@ -127,19 +127,19 @@ async function forwardNewMessages(axiosInstance: AxiosInstance) {
             sourceChannelIds.includes(channelIdAsString)
           );
 
-          // if (sourceChannelIds.includes(channelIdAsString)) {
-          //   // Processing Bonus Codes Call Requests to H25
-          //   console.log("Processing Bonus Codes Call Requests to H25");
-          //   await processBonusCode(axiosInstance, message.message);
-          //   // Send responseResult to the destination channel
-          //   await sendMessageToDestinationChannel();
-          // }
+          if (sourceChannelIds.includes(channelIdAsString)) {
+            // Processing Bonus Codes Call Requests to H25
+            console.log("Processing Bonus Codes Call Requests to H25");
+            await processBonusCode(axiosInstance, message.message);
+            // Send responseResult to the destination channel
+            await sendMessageToDestinationChannel();
+          }
 
-          // Processing Bonus Codes Call Requests to H25
-          console.log("Processing Bonus Codes Call Requests to H25");
-          await processBonusCode(axiosInstance, message.message);
-          // Send responseResult to the destination channel
-          await sendMessageToDestinationChannel();
+          // // Processing Bonus Codes Call Requests to H25
+          // console.log("Processing Bonus Codes Call Requests to H25");
+          // await processBonusCode(axiosInstance, message.message);
+          // // Send responseResult to the destination channel
+          // await sendMessageToDestinationChannel();
         } else {
           console.log("Peer is not a channel, skipping this message.");
         }
