@@ -12,7 +12,7 @@ async function ApiCall(): Promise<AxiosInstance> {
   const h25Password = siteConfig.h25Password || "";
 
   const endpoints = [
-    process.env.API_ENDPOINT_1,
+    // process.env.API_ENDPOINT_1,
     process.env.API_ENDPOINT_2,
     process.env.API_ENDPOINT_3,
     process.env.API_ENDPOINT_4,

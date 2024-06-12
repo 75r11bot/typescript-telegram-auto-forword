@@ -60,7 +60,7 @@ switch (NODE_ENV) {
       siteCode: "tlf-004",
       siteName: "default-host",
       baseURL: BASE_URL,
-      botToken: "6417397590:AAH8oGjlyhTEdxJCafrtSsPKRMJEBWbq3vI",
+      botToken: "7393640522:AAFZGg9Oj0v_BcfApffdYsdqAHU5PtkOHRw",
       h25User: h25User,
       h25Password: h25Password,
       sessionsDirectory: "./sessions/default-host",
