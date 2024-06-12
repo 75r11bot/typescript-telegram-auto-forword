@@ -38,7 +38,7 @@ async function extractTextFromImage(imagePath: string): Promise<string> {
   }
 }
 
-async function loginAndCaptureResponse(
+async function loginAppCaptureResponse(
   page: Page,
   user: string,
   password: string
@@ -93,7 +93,7 @@ async function loginAndCaptureResponse(
         const postData = request.postData();
         if (postData) {
           loginPayload = querystring.parse(postData); // Parse the URL-encoded string
-          console.log("Login payload:", loginPayload);
+          // console.log("Login payload:", loginPayload);
         }
       }
     });
@@ -148,6 +148,98 @@ async function loginAndCaptureResponse(
   return { token, payload: loginPayload, verifyCode };
 }
 
+async function loginWebCaptureResponse(
+  page: Page,
+  user: string,
+  password: string
+): Promise<{
+  verifyCode: any;
+  token: string | null;
+  payload: any | null;
+}> {
+  let token: string | null = null;
+  let verifyCode: string | null = null;
+  let loginPayload: any | null = null;
+
+  try {
+    // Navigate to the login page with a longer timeout
+    await page.goto("https://h25444.com/#/index", { timeout: 60000 }); // 60 seconds
+
+    // Interception for API responses
+    page.on("response", async (response) => {
+      // Check if the response is from the verify code API
+      if (response.url().includes("/api/v/user/getVerifyCode?")) {
+        const buffer = await response.body();
+        console.log("Response from verify code API: received binary data");
+
+        // Save the binary data to an image file
+        const imagePath = "./captcha.png";
+        fs.writeFileSync(imagePath, buffer);
+
+        // Perform OCR on the saved image
+        verifyCode = await extractTextFromImage(imagePath);
+        verifyCode = verifyCode.replace(/'/g, "");
+
+        console.log(`Extracted verify code: ${verifyCode}`);
+      }
+
+      // Check if the response is from the login API
+      if (response.url().includes("/api/v/user/newLoginv2")) {
+        const responseBody = await response.text();
+        const jsonResponse = JSON.parse(responseBody);
+        if (
+          jsonResponse.code === 10000 &&
+          jsonResponse.data &&
+          jsonResponse.data.token
+        ) {
+          token = jsonResponse.data.token;
+        }
+      }
+    });
+
+    // Interception for requests to capture payload
+    page.on("request", async (request) => {
+      if (request.url().includes("/api/v/user/newLoginv2")) {
+        const postData = request.postData();
+        if (postData) {
+          loginPayload = querystring.parse(postData); // Parse the URL-encoded string
+          // console.log("Login payload:", loginPayload);
+        }
+      }
+    });
+
+    // Perform login actions
+    await page.getByPlaceholder("ชื่อผู้ใช้").click();
+    await page.getByPlaceholder("ชื่อผู้ใช้").fill(user);
+    await page.getByPlaceholder("รหัสผ่าน").click();
+    await page.getByPlaceholder("รหัสผ่าน").fill(password);
+
+    // Assuming verifyCode has been extracted before filling it in
+    if (verifyCode) {
+      await page.locator('input[type="text"]').nth(2).click();
+      await page.locator('input[type="text"]').nth(2).fill(verifyCode);
+    }
+
+    await page
+      .getByRole("button", { name: "ลงชื่อเข้าใช้", exact: true })
+      .click();
+    await page.waitForTimeout(5000); // Wait for 5 seconds
+
+    // Wait for the iframe to load
+    const frame = page.frame({ name: "iframe" });
+    if (frame) {
+      await frame.waitForLoadState("domcontentloaded");
+      await frame.waitForTimeout(3000); // Wait for 3 seconds
+    } else {
+      console.error("Frame not found");
+    }
+  } catch (error) {
+    console.error("Error occurred during login:", error);
+  }
+
+  return { token, payload: loginPayload, verifyCode };
+}
+
 async function getH25Token(user: string, password: string) {
   let token: string | null = null;
   let payload: any | null = null;
@@ -160,7 +252,9 @@ async function getH25Token(user: string, password: string) {
     const context = await browser.newContext();
     let page = await context.newPage();
 
-    const result = await loginAndCaptureResponse(page, user, password);
+    // const result = await loginAppCaptureResponse(page, user, password);
+    const result = await loginWebCaptureResponse(page, user, password);
+
     token = result.token;
     payload = result.payload;
     verify = result.verifyCode;
@@ -169,7 +263,9 @@ async function getH25Token(user: string, password: string) {
       await page.close();
       page = await context.newPage();
       await page.waitForTimeout(5000); // Wait for 5 seconds before retrying
-      const retryResult = await loginAndCaptureResponse(page, user, password);
+      // const retryResult = await loginAppCaptureResponse(page, user, password);
+      const retryResult = await loginWebCaptureResponse(page, user, password);
+
       token = retryResult.token;
       payload = retryResult.payload;
     }

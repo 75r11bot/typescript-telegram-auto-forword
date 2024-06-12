@@ -6,10 +6,10 @@ import { StringSession } from "telegram/sessions";
 import { NewMessage } from "telegram/events";
 import { NewMessageEvent } from "telegram/events/NewMessage";
 import { AxiosInstance } from "axios";
-
+import bigInt from "big-integer";
 import { Api } from "telegram/tl";
 import { ApiCall } from "./axios/axios.config";
-import { bot } from "./bot";
+import { bot, initializeBot } from "./bot";
 import { siteConfig } from "./sites.config";
 
 import {
@@ -79,6 +79,7 @@ async function handleTelegramError(error: Error) {
   } else {
     console.log("Unhandled error, restarting client...");
     setTimeout(startClient, retryInterval);
+    setTimeout(startBot, retryInterval);
   }
 }
 
@@ -107,9 +108,10 @@ async function forwardNewMessages(axiosInstance: AxiosInstance) {
         const peer = message.peerId as Api.PeerChannel; // Assert the peerId type
         console.log("client received new message: ", message.message);
         console.log("instanceof peer: ", peer instanceof Api.PeerChannel);
+        console.log("peer : ", message.peerId);
 
         if (peer instanceof Api.PeerChannel) {
-          const channelId = peer.channelId;
+          const channelId = peer.channelId as bigInt.BigInteger;
           const channelIdAsString = `-100${channelId.toString()}`;
 
           console.log("Received message from channel ID:", channelIdAsString);
@@ -117,26 +119,25 @@ async function forwardNewMessages(axiosInstance: AxiosInstance) {
           // Forward the message to the destination channel
           console.log("Forwarding the message to the destination channel");
           await forwardMessage(message, channelIdAsString);
+          await forwardMessage(message, channelId.toString());
 
           //Check if the message is from one of the source channels
           console.log(
             "Check if the message is from one of the source channels:",
-            sourceChannelIds.includes(channelIdAsString)
+            sourceChannelIds.includes(channelIdAsString) ||
+              sourceChannelIds.includes(channelId.toString())
           );
 
-          if (sourceChannelIds.includes(channelIdAsString)) {
+          if (
+            sourceChannelIds.includes(channelIdAsString) ||
+            sourceChannelIds.includes(channelId.toString())
+          ) {
             // Processing Bonus Codes Call Requests to H25
             console.log("Processing Bonus Codes Call Requests to H25");
             await processBonusCode(axiosInstance, message.message);
             // Send responseResult to the destination channel
             await sendMessageToDestinationChannel();
           }
-
-          // // Processing Bonus Codes Call Requests to H25
-          // console.log("Processing Bonus Codes Call Requests to H25");
-          // await processBonusCode(axiosInstance, message.message);
-          // // Send responseResult to the destination channel
-          // await sendMessageToDestinationChannel();
         } else {
           console.log("Peer is not a channel, skipping this message.");
         }
@@ -221,13 +222,14 @@ async function sendMessageToDestinationChannel() {
   }
 }
 
+// Send a message to the destination channel using bot
 async function botSendMessageToDestinationChannel(
   bot: Telegraf<Context<Update>>
 ) {
   try {
     const destinationChannelId = responesChannelId;
     const resultData = responseResult.result;
-    const username = responseResult.username; // Fixed typo from `responseResult.username` to `responseResult.user`
+    const username = responseResult.username; // Fixed typo from `responseResult.username` to `responseResult.username`
     const summaryData = processH25Response(resultData);
 
     if (resultData.length > 0) {
@@ -259,11 +261,11 @@ async function botSendMessageToDestinationChannel(
         parse_mode: "Markdown",
       });
 
-      console.log(`Response message sent to ${destinationChannelId}`);
+      console.log(`Response message sent to ${destinationChannelId} using bot`);
     }
   } catch (error) {
     console.error(
-      `Error sending response message to ${destinationChannelId}:`,
+      `Error sending response message to ${destinationChannelId} using bot:`,
       error
     );
   }
@@ -347,14 +349,30 @@ async function startClient(sessionClient?: string) {
         await botSendMessageToDestinationChannel(bot);
       }
     });
-
-    bot
-      .launch()
-      .then(() => console.log("Bot started"))
-      .catch((err: any) => console.error("Error starting bot:", err));
   } catch (error) {
     console.error("Failed to start client:", error);
     await retryConnection();
+  }
+}
+
+// Start the bot
+async function startBot() {
+  try {
+    await initializeBot();
+    console.log("Bot started successfully.");
+  } catch (error) {
+    console.error("Error starting bot:", error);
+    retryBotStart();
+  }
+}
+
+// Retry starting the bot with exponential backoff
+function retryBotStart() {
+  if (retryInterval <= MAX_RETRIES * INITIAL_RETRY_INTERVAL) {
+    setTimeout(startBot, retryInterval);
+    retryInterval *= 2; // Exponential backoff
+  } else {
+    console.error("Max retries reached. Failed to start the bot.");
   }
 }
 
@@ -364,6 +382,7 @@ async function regenerateSession() {
     fs.unlinkSync(sessionFilePath);
     await initializeClient();
     await startClient();
+    await startBot();
   } catch (error) {
     console.error("Failed to regenerate session:", error);
     setTimeout(regenerateSession, retryInterval);
@@ -377,6 +396,7 @@ async function retryConnection() {
   while (!connected && retries < MAX_RETRIES) {
     try {
       await startClient();
+      await startBot();
       console.log("Service restarted successfully.");
       connected = true;
     } catch (error) {
@@ -407,15 +427,15 @@ async function startService() {
 
     console.log(`======= Serving on http://0.0.0.0:${port} ======`);
 
-    const app = express();
-    app.use(express.json());
+    expressServer = express();
+    expressServer.use(express.json());
 
     // Health check endpoint
-    app.get("/health", (req: Request, res: Response) => {
+    expressServer.get("/health", (req: Request, res: Response) => {
       res.status(200).send("OK");
     });
 
-    app.get("/", (req: Request, res: Response) => {
+    expressServer.get("/", (req: Request, res: Response) => {
       const resultData = responseResult.result;
       const username = responseResult.username;
       const summaryData = processH25Response(resultData); // Assuming you have access to this function
@@ -465,7 +485,7 @@ async function startService() {
       `);
     });
 
-    expressServer = app.listen(port, () => {
+    expressServer = expressServer.listen(port, () => {
       console.log(`Server listening on port ${port}`);
     });
 
@@ -520,6 +540,7 @@ async function handleClientDisconnect() {
   // Implement logic to handle client disconnection
   console.log("Attempting to reconnect...");
   await startClient();
+  await startBot();
 }
 
 async function monitorServiceHealth() {
@@ -531,13 +552,6 @@ async function monitorServiceHealth() {
     await restartService();
   }
 }
-
-setInterval(async () => {
-  if (!(await checkNetworkConnectivity())) {
-    console.log("Network connectivity lost. Attempting to reconnect...");
-    await handleClientDisconnect();
-  }
-}, 60000); // Check network connectivity every minute
 
 async function initializeService() {
   try {
@@ -551,17 +565,20 @@ async function initializeService() {
       if (sessionClient) {
         console.log("Session client found. Using existing session.");
         await startClient(sessionClient); // Start the client with the existing session
+        await startBot();
       } else {
         console.log(
           "Session client not found. Starting client with new session."
         );
         await startClient(); // Start the client with a new session
+        await startBot();
       }
     } else {
       console.log(
         `Session file not found at ${sessionFilePath}. Starting client with new session.`
       );
       await startClient(); // Start the client with a new session
+      await startBot();
     }
 
     await monitorServiceHealth(); // Check service health before starting
@@ -573,4 +590,27 @@ async function initializeService() {
   }
 }
 
-initializeService(); // Kickstart the service
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught exception:", error);
+  handleTelegramError(error);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled rejection at:", promise, "reason:", reason);
+  handleTelegramError(new Error(reason as string));
+});
+
+(async () => {
+  try {
+    initializeService(); // Kickstart the service
+    setInterval(async () => {
+      if (!(await checkNetworkConnectivity())) {
+        console.log("Network connectivity lost. Attempting to reconnect...");
+        await handleClientDisconnect();
+      }
+    }, 60000); // Check network connectivity every minute
+  } catch (error: any) {
+    console.error("Error in initialization:", error);
+    handleTelegramError(error);
+  }
+})();
