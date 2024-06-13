@@ -151,7 +151,10 @@ async function loginWebCaptureResponse(
   let loginPayload: any | null = null;
 
   try {
-    await page.goto("https://h25444.com/#/index", { timeout: 60000 });
+    await page.goto("https://h25444.com/#/index", {
+      waitUntil: "load",
+      timeout: 90000,
+    });
 
     page.on("response", async (response) => {
       if (response.url().includes("/api/v/user/getVerifyCode?")) {

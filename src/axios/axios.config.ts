@@ -4,6 +4,13 @@ import moment from "moment";
 import { getH25Token } from "../utility";
 import { siteConfig } from "../sites.config";
 
+const endpoints = [
+  process.env.API_ENDPOINT_1,
+  process.env.API_ENDPOINT_2,
+  process.env.API_ENDPOINT_3,
+  process.env.API_ENDPOINT_4,
+].filter(Boolean) as string[];
+
 async function initializeAxiosInstance(): Promise<AxiosInstance> {
   const siteId = "1451470260579512322";
   const siteCode = "ybaxcf-4";
@@ -11,22 +18,16 @@ async function initializeAxiosInstance(): Promise<AxiosInstance> {
   const h25Username = siteConfig.h25User || "";
   const h25Password = siteConfig.h25Password || "";
 
-  const endpoints = [
-    // process.env.API_ENDPOINT_1,
-    process.env.API_ENDPOINT_2,
-    process.env.API_ENDPOINT_3,
-    process.env.API_ENDPOINT_4,
-  ].filter(Boolean) as string[];
-
   axiosRetry(axios, {
     retries: 3,
     retryDelay: (retryCount) => retryCount * 1000,
     retryCondition: (error: AxiosError): boolean => {
       return (
         error.code === "ECONNABORTED" ||
+        error.code === "ECONNRESET" ||
         (error.response && error.response.status >= 500) ||
         false
-      ); // Ensure the return value is always a boolean
+      );
     },
   });
 
@@ -76,6 +77,7 @@ async function initializeAxiosInstance(): Promise<AxiosInstance> {
       const axiosInstance = axios.create({
         baseURL: endpoint,
         headers: headers,
+        timeout: 90000,
       });
 
       const url = `/v/user/refreshUserFund?siteId=${siteId}&siteCode=${siteCode}&platformType=${platformType}`;
@@ -85,7 +87,7 @@ async function initializeAxiosInstance(): Promise<AxiosInstance> {
         const responseData = response.data;
         if (responseData.code === 10000) {
           console.log(`Token ${token} is ready at endpoint ${endpoint}.`);
-          return axiosInstance; // Return the axios instance immediately
+          return axiosInstance; // Return immediately if axiosInstance is ready
         } else if (responseData.code === 10140) {
           console.log(`Token ${token} is expired at endpoint ${endpoint}.`);
           token = await getH25Token(h25Username, h25Password);
@@ -131,25 +133,31 @@ async function checkAxiosInstance(
     const siteCode = "ybaxcf-4";
     const platformType = "2";
 
-    const url = `/v/user/refreshUserFund?siteId=${siteId}&siteCode=${siteCode}&platformType=${platformType}`;
-    const response: AxiosResponse<any> = await axiosInstance.get(url);
-    if (response.status >= 200 && response.status < 300) {
-      if (response.data.code === 10000) {
-        console.log("axiosInstance is ready.");
-        return axiosInstance;
-      } else {
-        console.log("axiosInstance is not ready. Reinitializing...");
-        return initializeAxiosInstance();
+    let isReady = false;
+
+    for (const endpoint of endpoints) {
+      const url = `${endpoint}/v/user/refreshUserFund?siteId=${siteId}&siteCode=${siteCode}&platformType=${platformType}`;
+      const response: AxiosResponse<any> = await axiosInstance.get(url);
+
+      if (response.status >= 200 && response.status < 300) {
+        if (response.data.code === 10000) {
+          isReady = true;
+          console.log(`axiosInstance is ready at endpoint ${endpoint}.`);
+          return axiosInstance; // Return immediately once axiosInstance is ready
+        }
       }
     }
-    console.log(
-      "Response status code indicates axiosInstance is not ready. Reinitializing..."
-    );
-    return initializeAxiosInstance();
+
+    console.log("None of the endpoints are ready. Reinitializing...");
+    return initializeAxiosInstance(); // Reinitialize if no endpoint is ready
   } catch (error: any) {
     console.error("Error checking axiosInstance:", error);
+    if (error.code === "ECONNRESET" || error.code === "ECONNABORTED") {
+      console.log("Network error occurred. Retrying...");
+      return checkAxiosInstance(axiosInstance); // Retry on network errors
+    }
     console.log("Reinitializing axiosInstance...");
-    return initializeAxiosInstance();
+    return initializeAxiosInstance(); // Reinitialize for other errors
   }
 }
 

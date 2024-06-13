@@ -32,8 +32,8 @@ const sourceChannelIds = process.env.SOURCE_CHANNEL_IDS
   ? process.env.SOURCE_CHANNEL_IDS.split(",").map((id) => id.trim())
   : [];
 const destinationChannelId = process.env.DESTINATION_CHANNEL_ID || "";
-const responesChannelId = process.env.RESPONSE_CHANNEL_ID || "";
-
+const resultChannelId = process.env.RESPONSE_CHANNEL_ID || "";
+const sourceChannelId = process.env.SOURCE_CHANNEL_ID || "";
 const phoneNumber = process.env.APP_YOUR_PHONE || "";
 const userPassword = process.env.APP_YOUR_PWD || "";
 const port = Number(process.env.PORT) || 5000;
@@ -63,58 +63,107 @@ if (!botToken) {
 
 const bot = new Telegraf(botToken);
 
+// Initialize the Telegram bot
 async function initializeBot() {
   bot.start((ctx) => ctx.reply("Bot started!"));
-  await bot.launch();
-  console.log("Bot started successfully.");
+  axiosInstance = await checkAxiosInstance(axiosInstance);
+  console.log("Bot on Received message");
+
+  bot.on("message", async (ctx: any) => {
+    const message = ctx.message;
+    if (!message) {
+      console.log("Invalid message received:", message);
+      return;
+    }
+
+    if (message.caption !== undefined) {
+      console.log("Bot received new message caption:", message.caption);
+
+      // Check if current caption is the same as previous caption
+      if (message.caption !== lastProcessedMessage) {
+        await processBonusCode(axiosInstance, message.caption);
+
+        lastProcessedMessage = message.caption; // Update previous caption
+      } else {
+        console.log(
+          "Skipping processBonusCode as caption is the same as previous."
+        );
+      }
+
+      // Check if the message is from the source channel
+      if (message.chat.id === sourceChannelId) {
+        // Forward the message to the destination channel
+        console.log("Forwarding the message to the destination channel");
+        await processBonusCode(axiosInstance, message.caption);
+      }
+    } else if (message.text !== undefined) {
+      console.log("Bot received new message text:", message.text);
+    }
+
+    await botSendMessageToDestinationChannel(bot);
+  });
+
+  bot
+    .launch()
+    .then(() => console.log("Bot started successfully."))
+    .catch((err) => console.error("Error starting bot:", err));
 }
 
 async function botSendMessageToDestinationChannel(
-  bot: Telegraf<Context<Update>>
-) {
+  bot: Telegraf<Context>
+): Promise<void> {
   try {
     const resultData = responseResult.result;
-    const username = responseResult.username;
+    const username = siteConfig.h25User;
     const summaryData = processH25Response(resultData);
+    const destinationEntity = await client.getEntity(resultChannelId);
 
     if (resultData.length > 0) {
-      const formattedResponse = resultData
+      let formattedResponse = resultData
         .map(
           (result: { code: any; message: any; data: any }, index: number) => `
           **Result ${index + 1}**
           Code: \`${result.code}\`
-          Message: \`${result.message}\`
-          Details: \`${JSON.stringify(result.data, null, 2)}\`
         `
         )
         .join("\n");
 
       const summaryResponse = `
         Summary:
-        Success Count: ${summaryData.success.count}
-        Failure Count: ${summaryData.failure.count}
-        Failure Details: ${Object.entries(summaryData.failure.details)
-          .map(([message, count]) => `${message}: ${count}`)
-          .join(", ")}`;
+        Total : ${resultData.length}
+        Success : ${summaryData.success.count}
+        Failure : ${summaryData.failure.count}
+        `;
 
-      const responseMessage = `Bonus Code H25 Response User: ${username}\n${summaryResponse}\n\n${formattedResponse}`;
+      let responseMessage = `Bonus Code H25 Response User: ${username}\n${summaryResponse}\n\n${formattedResponse}`;
 
-      await bot.telegram.sendMessage(responesChannelId, responseMessage, {
+      // Validate message length against Telegram's limits (4096 characters)
+      if (responseMessage.length > 4096) {
+        console.warn(
+          "Message length exceeds Telegram limit. Truncating message."
+        );
+        responseMessage = responseMessage.substring(0, 4096); // Truncate message to fit Telegram's limit
+      }
+
+      await bot.telegram.sendMessage(destinationEntity, responseMessage, {
         parse_mode: "Markdown",
       });
 
-      console.log(`Response message sent to ${responesChannelId}`);
+      console.log(`Response message sent to ${resultChannelId}`);
     }
   } catch (error) {
     console.error(
-      `Error sending response message to ${responesChannelId}:`,
+      `Error sending response message to ${resultChannelId}:`,
       error
     );
   }
 }
 
+//Starting Bot
 async function startBot() {
   try {
+    console.error("initializeBot");
+
     await initializeBot();
   } catch (error) {
     console.error("Error starting bot:", error);
@@ -173,6 +222,8 @@ async function initializeSession() {
       sessionClient = savedSession;
       fs.writeFileSync(sessionFilePath, sessionClient);
       console.log("New session created and saved.");
+
+      await startClient();
     } else {
       console.error("Failed to save session. Expected a string.");
     }
@@ -190,7 +241,6 @@ async function handleTelegramError(error: Error) {
   } else {
     console.log("Unhandled error, restarting client...");
     setTimeout(startClient, retryInterval);
-    setTimeout(startBot, retryInterval);
   }
 }
 
@@ -208,19 +258,19 @@ async function listChats() {
   }
 }
 
+//Starting Client
 async function startClient() {
   try {
     await initializeClient();
     await initializeSession();
+    axiosInstance = await checkAxiosInstance(axiosInstance);
 
     const me = (await client.getEntity("me")) as Api.User;
     const displayName = [me.firstName, me.lastName].filter(Boolean).join(" ");
     console.log(`Signed in Successfully as ${displayName}`);
-    axiosInstance = await initializeAxiosInstance();
-    axiosInstance = await checkAxiosInstance(axiosInstance);
-
     await listChats();
     await forwardNewMessages(axiosInstance);
+    await startBot();
   } catch (error) {
     console.error("Failed to start client:", error);
   }
@@ -237,8 +287,10 @@ async function regenerateSession() {
   }
 }
 
+//Initializing Received message and forwarding
 async function forwardNewMessages(axiosInstance: AxiosInstance) {
   try {
+    console.log("Initializing message forwarding...");
     client.addEventHandler(async (event: NewMessageEvent) => {
       try {
         const message = event.message;
@@ -247,30 +299,59 @@ async function forwardNewMessages(axiosInstance: AxiosInstance) {
         console.log("Received new message:", message.message);
         console.log("Peer details:", peer);
 
+        console.log("Processing Bonus Codes Call Requests to H25");
+        await processBonusCode(axiosInstance, message.message);
+
         if (peer instanceof Api.PeerChannel) {
           const channelId =
             peer.channelId.valueOf() as unknown as bigInt.BigInteger;
           if (channelId) {
             const channelIdAsString = `-100${channelId.toString()}`;
             console.log("Channel ID as string:", channelIdAsString);
+            console.log("Forwarding the message to the destination channel");
+            await forwardMessage(message, channelIdAsString);
 
             if (sourceChannelIds.includes(channelIdAsString)) {
+              // Forward the message to the destination channel
               console.log("Forwarding the message to the destination channel");
               await forwardMessage(message, channelIdAsString);
-              console.log("Processing Bonus Codes Call Requests to H25");
-              await processBonusCode(axiosInstance, message.message);
-              await sendMessageToDestinationChannel();
+              // Processing Bonus Codes Call Requests to H25
+              // console.log("Processing Bonus Codes Call Requests to H25");
+              // await processBonusCode(axiosInstance, message.message);
+
+              // // Send responseResult to the destination channel
+              // await sendMessageToDestinationChannel();
             }
           } else {
             console.error("channelId is undefined for the message:", message);
           }
+        } else if (peer instanceof Api.PeerChat) {
+          const chatId = peer.chatId.valueOf() as unknown as bigInt.BigInteger;
+          console.log("Chat ID:", chatId.toString());
+          const chatIdAsString = `-${chatId.toString()}`;
+
+          if (!destinationChannelId.includes(chatIdAsString)) {
+            await forwardMessage(message, chatIdAsString);
+          }
+        } else if (peer instanceof Api.PeerUser) {
+          const userId = peer.userId.valueOf() as unknown as bigInt.BigInteger;
+          console.log("User ID:", userId.toString());
+
+          // Handle messages from users if necessary
+        } else {
+          console.log("Unknown peer type, skipping this message.");
         }
       } catch (error) {
         console.error("Error handling new message event:", error);
+        handleTelegramError(error as Error); // Use type assertion
       }
     }, new NewMessage({}));
+    console.log("Message forwarding initialized successfully.");
+    // Send responseResult to the destination channel
+    await sendMessageToDestinationChannel();
   } catch (error) {
     console.error("Error setting up message forwarding:", error);
+    handleTelegramError(error as Error); // Use type assertion
   }
 }
 
@@ -297,7 +378,7 @@ async function forwardMessage(message: any, channelId: string) {
 
 async function sendMessageToDestinationChannel() {
   try {
-    const destinationEntity = await client.getEntity(responesChannelId);
+    const destinationEntity = await client.getEntity(resultChannelId);
     const resultData = responseResult.result;
     const username = responseResult.username;
     const summaryData = processH25Response(resultData);
@@ -318,11 +399,9 @@ async function sendMessageToDestinationChannel() {
 
       const summaryResponse =
         `Summary:\n` +
+        `Total Count: ${resultData.length}\n` +
         `Success Count: ${summaryData.success.count}\n` +
-        `Failure Count: ${summaryData.failure.count}\n` +
-        `Failure Details: ${Object.entries(summaryData.failure.details)
-          .map(([message, count]) => `${message}: ${count}`)
-          .join(", ")}`;
+        `Failure Count: ${summaryData.failure.count}\n`;
 
       const responseMessage = `Bonus Code H25 Response User :${username}\n${summaryResponse}\n\n${formattedResponse}`;
 
@@ -348,7 +427,6 @@ async function retryConnection() {
   while (!connected && retries < MAX_RETRIES) {
     try {
       await startClient();
-      await startBot();
       console.log("Service restarted successfully.");
       connected = true;
     } catch (error) {
@@ -434,8 +512,6 @@ async function startService() {
     expressServer = expressServer.listen(port, () => {
       console.log(`Server listening on port ${port}`);
     });
-    axiosInstance = await initializeAxiosInstance();
-    axiosInstance = await checkAxiosInstance(axiosInstance);
 
     return expressServer; // Return the Express server instance
   } catch (error) {
@@ -493,11 +569,8 @@ async function monitorServiceHealth() {
 async function initializeService() {
   try {
     console.log("Initializing service...");
-    await initializeClient();
-    await initializeSession();
-    await startClient();
-    await startBot();
 
+    await startClient();
     await monitorServiceHealth(); // Check service health before starting
 
     expressServer = await startService(); // Store the Express server instance
@@ -513,7 +586,14 @@ async function wait(ms: number): Promise<void> {
 
 (async () => {
   try {
+    axiosInstance = await initializeAxiosInstance();
     await initializeService();
+    setInterval(async () => {
+      if (!(await checkNetworkConnectivity())) {
+        console.log("Network connectivity lost. Attempting to reconnect...");
+        await initializeService();
+      }
+    }, 60000); // Check network connectivity every minute
   } catch (error) {
     console.error("Error in initialization:", error);
   }
