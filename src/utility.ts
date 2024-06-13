@@ -151,7 +151,7 @@ async function loginWebCaptureResponse(
   let loginPayload: any | null = null;
 
   try {
-    await page.goto("https://h25444.com/#/index", {
+    await page.goto("https://h25gg.com/#/index", {
       waitUntil: "load",
       timeout: 90000,
     });

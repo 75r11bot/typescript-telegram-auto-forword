@@ -116,7 +116,7 @@ async function botSendMessageToDestinationChannel(
     const resultData = responseResult.result;
     const username = siteConfig.h25User;
     const summaryData = processH25Response(resultData);
-    const destinationEntity = await client.getEntity(resultChannelId);
+    const destinationEntity = await client.getEntity(destinationChannelId);
 
     if (resultData.length > 0) {
       let formattedResponse = resultData
