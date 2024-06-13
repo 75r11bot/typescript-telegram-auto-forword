@@ -8,8 +8,9 @@ import { createWorker as tesseractCreateWorker, Worker } from "tesseract.js";
 
 dotenv.config();
 
-const webLoginUrl = process.env.PAGE_LOGIN_WEB || "";
-const appLoginUrl = process.env.PAGE_LOGIN_APP || "";
+const webLoginUrl = process.env.URL_LOGIN_WEB || "https://h25gg.com/#/index";
+const appLoginUrl =
+  process.env.URL_LOGIN_APP || "https://75rapp.com/client.html";
 
 async function createTesseractWorker(): Promise<Worker> {
   try {
