@@ -13,8 +13,6 @@ import {
   checkAxiosInstance,
 } from "./axios/axios.config";
 
-import { Telegraf, Context } from "telegraf";
-import { Update } from "telegraf/typings/core/types/typegram";
 import {
   processBonusCode,
   responseResult,
@@ -23,7 +21,7 @@ import {
   checkNetworkConnectivity,
 } from "./services";
 import { siteConfig } from "./sites.config";
-
+import { initializeBot } from "./bot";
 dotenv.config();
 
 const apiId = Number(process.env.API_ID);
@@ -32,14 +30,12 @@ const sourceChannelIds = process.env.SOURCE_CHANNEL_IDS
   ? process.env.SOURCE_CHANNEL_IDS.split(",").map((id) => id.trim())
   : [];
 const destinationChannelId = process.env.DESTINATION_CHANNEL_ID || "";
-const responesChannelId = process.env.RESPONSE_CHANNEL_ID || "";
-
+const resultChannelId = process.env.RESULT_CHANNEL_ID || "";
 const phoneNumber = process.env.APP_YOUR_PHONE || "";
 const userPassword = process.env.APP_YOUR_PWD || "";
 const port = Number(process.env.PORT) || 5000;
 const sessionsDirectory = siteConfig.sessionsDirectory;
 const sessionFilePath = siteConfig.sessionFileName;
-const botToken = siteConfig.botToken;
 const MAX_RETRIES = 5;
 const INITIAL_RETRY_INTERVAL = 6000; // 5 seconds
 let retryInterval = INITIAL_RETRY_INTERVAL;
@@ -52,139 +48,36 @@ let sessionClient = fs.existsSync(sessionFilePath)
   ? fs.readFileSync(sessionFilePath, "utf-8")
   : "";
 
-let client: TelegramClient;
+let client: TelegramClient | null = null; // Allow client to be null
 let axiosInstance: AxiosInstance;
 let expressServer: any; // Define a variable to store the Express server instance
-let lastProcessedMessage: string | null = null; // Variable to store last processed message
-
-if (!botToken) {
-  throw new Error("BOT_TOKEN is not set in environment variables");
-}
-
-const bot = new Telegraf(botToken);
-
-// Initialize the Telegram bot
-async function initializeBot() {
-  bot.start((ctx) => ctx.reply("Bot started!"));
-  axiosInstance = await checkAxiosInstance(axiosInstance);
-  console.log("Bot on Received message");
-
-  bot.on("message", async (ctx: { message: any }) => {
-    const message = ctx.message;
-    if (message && message.caption !== undefined) {
-      console.log("Bot received new message caption:", message.caption);
-
-      // Check if current caption is the same as previous caption
-      if (message.caption !== lastProcessedMessage) {
-        await processBonusCode(axiosInstance, message.caption);
-        lastProcessedMessage = message.caption; // Update previous caption
-      } else {
-        console.log(
-          "Skipping processBonusCode as caption is the same as previous."
-        );
-      }
-      // Ensure the message is not from the response channel before sending a response
-      if (!responesChannelId.includes(message.chat.id)) {
-        await botSendMessageToDestinationChannel(bot);
-        // await sendMessageToDestinationChannel();
-      }
-    } else if (message && message.text !== undefined) {
-      console.log("Bot received new message text:", message.text);
-    } else {
-      console.log("Invalid message received:", message);
-    }
-  });
-
-  bot
-    .launch()
-    .then(() => console.log("Bot started successfully."))
-    .catch((err: any) => console.error("Error starting bot:", err));
-}
-
-async function botSendMessageToDestinationChannel(
-  bot: Telegraf<Context>
-): Promise<void> {
-  try {
-    const resultData = responseResult.result;
-    const username = siteConfig.h25User;
-    const summaryData = processH25Response(resultData);
-    const destinationEntity = await client.getEntity(destinationChannelId);
-
-    if (resultData.length > 0) {
-      let formattedResponse = resultData
-        .map(
-          (result: { code: any; message: any; data: any }, index: number) => `
-          **Result ${index + 1}**
-          Code: \`${result.code}\`
-        `
-        )
-        .join("\n");
-
-      const summaryResponse = `
-        Summary:
-        Total : ${resultData.length}
-        Success : ${summaryData.success.count}
-        Failure : ${summaryData.failure.count}
-        `;
-
-      let responseMessage = `Bonus Code H25 Response User: ${username}\n${summaryResponse}\n\n${formattedResponse}`;
-
-      // Validate message length against Telegram's limits (4096 characters)
-      if (responseMessage.length > 4096) {
-        console.warn(
-          "Message length exceeds Telegram limit. Truncating message."
-        );
-        responseMessage = responseMessage.substring(0, 4096); // Truncate message to fit Telegram's limit
-      }
-
-      await bot.telegram.sendMessage(destinationEntity, responseMessage, {
-        parse_mode: "Markdown",
-      });
-
-      console.log(`Response message sent to ${responesChannelId}`);
-    }
-  } catch (error) {
-    console.error(
-      `Error sending response message to ${responesChannelId}:`,
-      error
-    );
-  }
-}
-
-//Starting Bot
-async function startBot() {
-  try {
-    console.error("initializeBot");
-
-    await initializeBot();
-  } catch (error) {
-    console.error("Error starting bot:", error);
-  }
-}
 
 // Initialize the Telegram client
 async function initializeClient() {
-  client = new TelegramClient(
-    new StringSession(sessionClient),
-    apiId,
-    apiHash,
-    {
-      connectionRetries: 5,
-      timeout: 86400000, // 24 hours
-      useWSS: true,
+  if (!client) {
+    client = new TelegramClient(
+      new StringSession(sessionClient),
+      apiId,
+      apiHash,
+      {
+        connectionRetries: 5,
+        timeout: 86400000, // 24 hours
+        useWSS: true,
+      }
+    );
+    await client.connect();
+    const isUserAuthorized = await client.isUserAuthorized();
+    if (!isUserAuthorized) {
+      throw new Error("User is not authorized.");
     }
-  );
-
-  await client.connect();
-  const isUserAuthorized = await client.isUserAuthorized();
-  if (!isUserAuthorized) {
-    throw new Error("User is not authorized.");
+    console.log("Telegram client initialized and user authorized.");
   }
-  console.log("Telegram client initialized and user authorized.");
 }
 
 // Initialize session
 async function initializeSession() {
+  if (!client) return;
+
   if (sessionClient) {
     console.log("Using existing session...");
     await client.connect();
@@ -230,16 +123,48 @@ async function handleTelegramError(error: Error) {
   ) {
     console.log("Connection issue, retrying...");
     retryConnection();
+  } else if (error.message.includes("Conflict")) {
+    console.log("Conflict detected, restarting service...");
+    await restartService();
   } else {
     console.log("Unhandled error, restarting client...");
     setTimeout(startClient, retryInterval);
   }
 }
 
+async function restartService() {
+  try {
+    console.log("Restarting service...");
+
+    // Close the Express server if it exists
+    if (expressServer) {
+      await new Promise<void>((resolve, reject) => {
+        expressServer.close((err: any) => {
+          if (err) return reject(err);
+          resolve();
+        });
+      });
+      expressServer = null;
+    }
+
+    if (client) {
+      await client.disconnect();
+      client = null;
+    }
+
+    // Reinitialize the service
+    await initializeService();
+    console.log("Service restarted successfully.");
+  } catch (error) {
+    console.error("Error restarting service:", error);
+  }
+}
+
 async function listChats() {
   try {
-    console.log("Calling listChats...");
+    if (!client) throw new Error("Client is not initialized");
 
+    console.log("Calling listChats...");
     const dialogs = await client.getDialogs();
 
     for (const dialog of dialogs) {
@@ -250,19 +175,21 @@ async function listChats() {
   }
 }
 
-//Starting Client
+// Starting Client
 async function startClient() {
   try {
     await initializeClient();
     await initializeSession();
     axiosInstance = await checkAxiosInstance(axiosInstance);
 
-    const me = (await client.getEntity("me")) as Api.User;
-    const displayName = [me.firstName, me.lastName].filter(Boolean).join(" ");
-    console.log(`Signed in Successfully as ${displayName}`);
-    await listChats();
-    await forwardNewMessages(axiosInstance);
-    await startBot();
+    if (client) {
+      const me = (await client.getEntity("me")) as Api.User;
+      const displayName = [me.firstName, me.lastName].filter(Boolean).join(" ");
+      console.log(`Signed in Successfully as ${displayName}`);
+      await listChats();
+      await forwardNewMessages(axiosInstance);
+      await initializeBot(axiosInstance);
+    }
   } catch (error) {
     console.error("Failed to start client:", error);
   }
@@ -279,9 +206,11 @@ async function regenerateSession() {
   }
 }
 
-//Initializing Received message and forwarding
+// Initializing Received message and forwarding
 async function forwardNewMessages(axiosInstance: AxiosInstance) {
   try {
+    if (!client) throw new Error("Client is not initialized");
+
     console.log("Initializing message forwarding...");
     client.addEventHandler(async (event: NewMessageEvent) => {
       try {
@@ -307,12 +236,6 @@ async function forwardNewMessages(axiosInstance: AxiosInstance) {
               // Forward the message to the destination channel
               console.log("Forwarding the message to the destination channel");
               await forwardMessage(message, channelIdAsString);
-              // Processing Bonus Codes Call Requests to H25
-              // console.log("Processing Bonus Codes Call Requests to H25");
-              // await processBonusCode(axiosInstance, message.message);
-
-              // // Send responseResult to the destination channel
-              // await sendMessageToDestinationChannel();
             }
           } else {
             console.error("channelId is undefined for the message:", message);
@@ -349,6 +272,8 @@ async function forwardNewMessages(axiosInstance: AxiosInstance) {
 
 async function forwardMessage(message: any, channelId: string) {
   try {
+    if (!client) throw new Error("Client is not initialized");
+
     const sourceEntity = await client.getEntity(channelId);
     const destinationEntity = await client.getEntity(destinationChannelId);
 
@@ -370,7 +295,9 @@ async function forwardMessage(message: any, channelId: string) {
 
 async function sendMessageToDestinationChannel() {
   try {
-    const destinationEntity = await client.getEntity(responesChannelId);
+    if (!client) throw new Error("Client is not initialized");
+
+    const destinationEntity = await client.getEntity(resultChannelId);
     const resultData = responseResult.result;
     const username = responseResult.username;
     const summaryData = processH25Response(resultData);
@@ -402,11 +329,11 @@ async function sendMessageToDestinationChannel() {
         parseMode: "markdown",
       });
 
-      console.log(`Response message sent to ${destinationChannelId}`);
+      console.log(`Response message sent to ${resultChannelId}`);
     }
   } catch (error) {
     console.error(
-      `Error sending response message to ${destinationChannelId}:`,
+      `Error sending response message to ${resultChannelId}:`,
       error
     );
   }
@@ -512,22 +439,6 @@ async function startService() {
   }
 }
 
-async function restartService() {
-  try {
-    console.log("Restarting service...");
-
-    // Stop the current Express server instance
-    expressServer.close();
-
-    // Start a new instance of the Express server
-    expressServer = await startService();
-
-    console.log("Service restarted successfully.");
-  } catch (error) {
-    console.error("Error restarting service:", error);
-  }
-}
-
 async function checkServiceHealth() {
   return new Promise((resolve) => {
     const net = require("net");
@@ -580,6 +491,7 @@ async function wait(ms: number): Promise<void> {
   try {
     axiosInstance = await initializeAxiosInstance();
     await initializeService();
+    monitorServiceHealth();
     setInterval(async () => {
       if (!(await checkNetworkConnectivity())) {
         console.log("Network connectivity lost. Attempting to reconnect...");

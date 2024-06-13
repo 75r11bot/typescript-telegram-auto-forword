@@ -8,6 +8,10 @@ import { createWorker as tesseractCreateWorker, Worker } from "tesseract.js";
 
 dotenv.config();
 
+const webLoginUrl = process.env.URL_LOGIN_WEB || "https://h25gg.com/#/index";
+const appLoginUrl =
+  process.env.URL_LOGIN_APP || "https://75rapp.com/client.html";
+
 async function createTesseractWorker(): Promise<Worker> {
   try {
     const worker = await tesseractCreateWorker();
@@ -53,7 +57,7 @@ async function loginAppCaptureResponse(
   let loginPayload: any | null = null;
 
   try {
-    await page.goto("https://75rapp.com/client.html", { timeout: 60000 });
+    await page.goto(appLoginUrl, { timeout: 60000 });
 
     page.on("response", async (response) => {
       if (response.url().includes("/api/v/user/getVerifyCode?")) {
@@ -151,7 +155,7 @@ async function loginWebCaptureResponse(
   let loginPayload: any | null = null;
 
   try {
-    await page.goto("https://h25444.com/#/index", {
+    await page.goto(webLoginUrl, {
       waitUntil: "load",
       timeout: 90000,
     });
