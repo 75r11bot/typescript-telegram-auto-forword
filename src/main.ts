@@ -14,7 +14,6 @@ import {
 } from "./axios/axios.config";
 
 import { Telegraf, Context } from "telegraf";
-import { Update } from "telegraf/typings/core/types/typegram";
 import {
   processBonusCode,
   responseResult,
