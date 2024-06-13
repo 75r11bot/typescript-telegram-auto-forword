@@ -24,6 +24,7 @@ if (!botToken) {
 
 // Initialize the Telegram bot
 async function initializeBot(axiosInstance: AxiosInstance) {
+  console.log("Initialize the Telegram bot");
   if (botStarted) return;
   botStarted = true;
 
