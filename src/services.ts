@@ -2,7 +2,10 @@
 
 import axios, { AxiosInstance, AxiosResponse, AxiosError } from "axios";
 import dotenv from "dotenv";
-import { ApiCall } from "./axios/axios.config";
+import {
+  initializeAxiosInstance,
+  checkAxiosInstance,
+} from "./axios/axios.config";
 import { siteConfig } from "./sites.config";
 
 // Configuring dotenv
@@ -82,7 +85,7 @@ async function sendRequest(
         break;
       case 10140:
         console.log("Token expired. Setting up new axiosInstance...");
-        axiosInstance = await ApiCall();
+        axiosInstance = await checkAxiosInstance(axiosInstance);
         await sendRequest(cardNo, axiosInstance, retryCount);
         break;
       default:
