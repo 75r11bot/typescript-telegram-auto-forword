@@ -33,7 +33,7 @@ services:
       - ./sessions:/usr/src/app/sessions
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "curl -f host.intanal.docker:5003/ || exit 1"]
+      test: ["CMD-SHELL", "curl -f ${BASE_URL} || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
