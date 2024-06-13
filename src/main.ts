@@ -37,7 +37,7 @@ const port = Number(process.env.PORT) || 5000;
 const sessionsDirectory = siteConfig.sessionsDirectory;
 const sessionFilePath = siteConfig.sessionFileName;
 const MAX_RETRIES = 5;
-const INITIAL_RETRY_INTERVAL = 6000; // 5 seconds
+const INITIAL_RETRY_INTERVAL = 6000; // 6 seconds
 let retryInterval = INITIAL_RETRY_INTERVAL;
 
 if (!fs.existsSync(sessionsDirectory)) {
@@ -48,11 +48,10 @@ let sessionClient = fs.existsSync(sessionFilePath)
   ? fs.readFileSync(sessionFilePath, "utf-8")
   : "";
 
-let client: TelegramClient | null = null; // Allow client to be null
+let client: TelegramClient | null = null;
 let axiosInstance: AxiosInstance;
-let expressServer: any; // Define a variable to store the Express server instance
+let expressServer: any;
 
-// Initialize the Telegram client
 async function initializeClient() {
   if (!client) {
     client = new TelegramClient(
@@ -74,7 +73,6 @@ async function initializeClient() {
   }
 }
 
-// Initialize session
 async function initializeSession() {
   if (!client) return;
 
@@ -101,7 +99,6 @@ async function initializeSession() {
       },
     });
 
-    // Check if client.session.save() returns a string
     const savedSession = client.session.save();
     if (typeof savedSession === "string") {
       sessionClient = savedSession;
@@ -136,7 +133,6 @@ async function restartService() {
   try {
     console.log("Restarting service...");
 
-    // Close the Express server if it exists
     if (expressServer) {
       await new Promise<void>((resolve, reject) => {
         expressServer.close((err: any) => {
@@ -152,7 +148,6 @@ async function restartService() {
       client = null;
     }
 
-    // Reinitialize the service
     await initializeService();
     console.log("Service restarted successfully.");
   } catch (error) {
@@ -175,7 +170,6 @@ async function listChats() {
   }
 }
 
-// Starting Client
 async function startClient() {
   try {
     await initializeClient();
@@ -206,7 +200,6 @@ async function regenerateSession() {
   }
 }
 
-// Initializing Received message and forwarding
 async function forwardNewMessages(axiosInstance: AxiosInstance) {
   try {
     if (!client) throw new Error("Client is not initialized");
@@ -220,82 +213,64 @@ async function forwardNewMessages(axiosInstance: AxiosInstance) {
         console.log("Received new message:", message.message);
         console.log("Peer details:", peer);
 
-        console.log("Processing Bonus Codes Call Requests to H25");
         await processBonusCode(axiosInstance, message.message);
 
         if (peer instanceof Api.PeerChannel) {
-          const channelId =
-            peer.channelId.valueOf() as unknown as bigInt.BigInteger;
-          if (channelId) {
-            const channelIdAsString = `-100${channelId.toString()}`;
-            console.log("Channel ID as string:", channelIdAsString);
-            console.log("Forwarding the message to the destination channel");
-            await forwardMessage(message, channelIdAsString);
+          const channelId = `-100${peer.channelId.toString()}`;
+          console.log("Channel ID as string:", channelId);
 
-            if (sourceChannelIds.includes(channelIdAsString)) {
-              // Forward the message to the destination channel
-              console.log("Forwarding the message to the destination channel");
-              await forwardMessage(message, channelIdAsString);
-            }
-          } else {
-            console.error("channelId is undefined for the message:", message);
+          if (sourceChannelIds.includes(channelId)) {
+            console.log("Forwarding the message to the destination channel");
+            await forwardMessage(message, destinationChannelId);
           }
         } else if (peer instanceof Api.PeerChat) {
-          const chatId = peer.chatId.valueOf() as unknown as bigInt.BigInteger;
-          console.log("Chat ID:", chatId.toString());
-          const chatIdAsString = `-${chatId.toString()}`;
+          const chatId = `-${peer.chatId.toString()}`;
+          console.log("Chat ID as string:", chatId);
 
-          if (!destinationChannelId.includes(chatIdAsString)) {
-            await forwardMessage(message, chatIdAsString);
+          if (!destinationChannelId.includes(chatId)) {
+            await forwardMessage(message, destinationChannelId);
           }
         } else if (peer instanceof Api.PeerUser) {
-          const userId = peer.userId.valueOf() as unknown as bigInt.BigInteger;
-          console.log("User ID:", userId.toString());
-
-          // Handle messages from users if necessary
+          const userId = peer.userId.toString();
+          console.log("User ID as string:", userId);
         } else {
           console.log("Unknown peer type, skipping this message.");
         }
       } catch (error) {
         console.error("Error handling new message event:", error);
-        handleTelegramError(error as Error); // Use type assertion
+        handleTelegramError(error as Error);
       }
     }, new NewMessage({}));
     console.log("Message forwarding initialized successfully.");
-    // Send responseResult to the destination channel
     await sendMessageToDestinationChannel();
   } catch (error) {
     console.error("Error setting up message forwarding:", error);
-    handleTelegramError(error as Error); // Use type assertion
+    handleTelegramError(error as Error);
   }
 }
 
-async function forwardMessage(message: any, channelId: string) {
+async function forwardMessage(message: any, destination: string) {
   try {
     if (!client) throw new Error("Client is not initialized");
 
-    const sourceEntity = await client.getEntity(channelId);
-    const destinationEntity = await client.getEntity(destinationChannelId);
+    const destinationEntity = await client.getEntity(destination);
 
     await client.forwardMessages(destinationEntity, {
-      fromPeer: sourceEntity,
+      fromPeer: message.peerId,
       messages: [message.id],
     });
 
-    console.log(
-      `Message forwarded from ${channelId} to ${destinationChannelId}`
-    );
+    console.log(`Message forwarded to ${destination} successfully`);
   } catch (error) {
-    console.error(
-      `Error forwarding message from ${channelId} to ${destinationChannelId}:`,
-      error
-    );
+    console.error(`Error forwarding message to ${destination}:`, error);
   }
 }
 
 async function sendMessageToDestinationChannel() {
   try {
-    if (!client) throw new Error("Client is not initialized");
+    if (!client) {
+      throw new Error("Client is not initialized");
+    }
 
     const destinationEntity = await client.getEntity(resultChannelId);
     const resultData = responseResult.result;
@@ -322,7 +297,7 @@ async function sendMessageToDestinationChannel() {
         `Success Count: ${summaryData.success.count}\n` +
         `Failure Count: ${summaryData.failure.count}\n`;
 
-      const responseMessage = `Bonus Code H25 Response User :${username}\n${summaryResponse}\n\n${formattedResponse}`;
+      const responseMessage = `Bonus Code H25 Response User ${username}\n${summaryResponse}\n\n${formattedResponse}`;
 
       await client.sendMessage(destinationEntity, {
         message: responseMessage,
@@ -435,7 +410,7 @@ async function startService() {
     return expressServer; // Return the Express server instance
   } catch (error) {
     console.error("Service initialization error:", error);
-    handleTelegramError(error as Error); // Use type assertion
+    handleTelegramError(error as Error); // Use type assertion if necessary
   }
 }
 

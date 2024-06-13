@@ -1,9 +1,6 @@
 import { Telegraf, Context } from "telegraf";
 import { siteConfig } from "./sites.config";
-import {
-  initializeAxiosInstance,
-  checkAxiosInstance,
-} from "./axios/axios.config";
+import { checkAxiosInstance } from "./axios/axios.config";
 import { AxiosInstance } from "axios";
 import {
   processBonusCode,
@@ -13,7 +10,6 @@ import {
 const botToken = siteConfig.botToken;
 const resultChannelId = process.env.RESULT_CHANNEL_ID || "";
 const sourceChannelId = process.env.SOURCE_CHANNEL_ID || "";
-const destinationChannelId = process.env.DESTINATION_CHANNEL_ID || "";
 
 let lastProcessedMessage: string | null = null; // Variable to store last processed message
 let botStarted = false;
@@ -106,7 +102,7 @@ async function botSendMessageToDestinationChannel(
         responseMessage = responseMessage.substring(0, 4096); // Truncate message to fit Telegram's limit
       }
 
-      await bot.telegram.sendMessage(destinationChannelId, responseMessage, {
+      await bot.telegram.sendMessage(resultChannelId, responseMessage, {
         parse_mode: "Markdown",
       });
 
