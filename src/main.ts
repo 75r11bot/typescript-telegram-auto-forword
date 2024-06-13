@@ -32,7 +32,7 @@ const sourceChannelIds = process.env.SOURCE_CHANNEL_IDS
   ? process.env.SOURCE_CHANNEL_IDS.split(",").map((id) => id.trim())
   : [];
 const destinationChannelId = process.env.DESTINATION_CHANNEL_ID || "";
-const resultChannelId = process.env.RESPONSE_CHANNEL_ID || "";
+const resultChannelId = process.env.RESULT_CHANNEL_ID || "";
 const sourceChannelId = process.env.SOURCE_CHANNEL_ID || "";
 const phoneNumber = process.env.APP_YOUR_PHONE || "";
 const userPassword = process.env.APP_YOUR_PWD || "";
