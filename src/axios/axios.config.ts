@@ -4,7 +4,7 @@ import moment from "moment";
 import { getH25Token } from "../utility";
 import { siteConfig } from "../sites.config";
 
-async function ApiCall(): Promise<AxiosInstance> {
+async function initializeAxiosInstance(): Promise<AxiosInstance> {
   const siteId = "1451470260579512322";
   const siteCode = "ybaxcf-4";
   const platformType = "2";
@@ -123,4 +123,34 @@ async function ApiCall(): Promise<AxiosInstance> {
   throw new Error("No valid endpoint and token combination found.");
 }
 
-export { ApiCall };
+async function checkAxiosInstance(
+  axiosInstance: AxiosInstance
+): Promise<AxiosInstance> {
+  try {
+    const siteId = "1451470260579512322";
+    const siteCode = "ybaxcf-4";
+    const platformType = "2";
+
+    const url = `/v/user/refreshUserFund?siteId=${siteId}&siteCode=${siteCode}&platformType=${platformType}`;
+    const response: AxiosResponse<any> = await axiosInstance.get(url);
+    if (response.status >= 200 && response.status < 300) {
+      if (response.data.code === 10000) {
+        console.log("axiosInstance is ready.");
+        return axiosInstance;
+      } else {
+        console.log("axiosInstance is not ready. Reinitializing...");
+        return initializeAxiosInstance();
+      }
+    }
+    console.log(
+      "Response status code indicates axiosInstance is not ready. Reinitializing..."
+    );
+    return initializeAxiosInstance();
+  } catch (error: any) {
+    console.error("Error checking axiosInstance:", error);
+    console.log("Reinitializing axiosInstance...");
+    return initializeAxiosInstance();
+  }
+}
+
+export { initializeAxiosInstance, checkAxiosInstance };
