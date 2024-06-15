@@ -65,11 +65,7 @@ async function initializeClient() {
       }
     );
     await client.connect();
-    const isUserAuthorized = await client.isUserAuthorized();
-    if (!isUserAuthorized) {
-      await startClient();
-    }
-    console.log("Telegram client initialized and user authorized.");
+    console.log("Telegram client initialized and connected.");
   }
 }
 
@@ -104,8 +100,6 @@ async function initializeSession() {
       sessionClient = savedSession;
       fs.writeFileSync(sessionFilePath, sessionClient);
       console.log("New session created and saved.");
-
-      await startClient();
     } else {
       console.error("Failed to save session. Expected a string.");
     }
@@ -223,7 +217,7 @@ async function regenerateSession() {
   try {
     console.log("Regenerating session...");
     fs.unlinkSync(sessionFilePath);
-    await initializeService();
+    await initializeSession();
   } catch (error) {
     console.error("Failed to regenerate session:", error);
     setTimeout(regenerateSession, retryInterval);
@@ -273,6 +267,10 @@ async function forwardNewMessages(axiosInstance: AxiosInstance) {
         handleTelegramError(error as Error);
       }
     }, new NewMessage({}));
+
+    // Ensure we are connected before proceeding
+    await client.connect();
+
     console.log("Message forwarding initialized successfully.");
     await sendMessageToDestinationChannel();
   } catch (error) {
