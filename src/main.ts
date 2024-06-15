@@ -6,7 +6,6 @@ import { StringSession } from "telegram/sessions";
 import { NewMessage } from "telegram/events";
 import { NewMessageEvent } from "telegram/events/NewMessage";
 import { AxiosInstance } from "axios";
-import bigInt from "big-integer";
 import { Api } from "telegram/tl";
 import {
   initializeAxiosInstance,
@@ -22,6 +21,7 @@ import {
 } from "./services";
 import { siteConfig } from "./sites.config";
 import { initializeBot } from "./bot";
+
 dotenv.config();
 
 const apiId = Number(process.env.API_ID);
@@ -33,7 +33,7 @@ const destinationChannelId = process.env.DESTINATION_CHANNEL_ID || "";
 const resultChannelId = process.env.RESULT_CHANNEL_ID || "";
 const phoneNumber = process.env.APP_YOUR_PHONE || "";
 const userPassword = process.env.APP_YOUR_PWD || "";
-const port = Number(process.env.PORT) || 5000;
+const port = Number(process.env.PORT) || 5003;
 const sessionsDirectory = siteConfig.sessionsDirectory;
 const sessionFilePath = siteConfig.sessionFileName;
 const MAX_RETRIES = 5;
@@ -67,7 +67,7 @@ async function initializeClient() {
     await client.connect();
     const isUserAuthorized = await client.isUserAuthorized();
     if (!isUserAuthorized) {
-      throw new Error("User is not authorized.");
+      await startClient();
     }
     console.log("Telegram client initialized and user authorized.");
   }
@@ -114,6 +114,7 @@ async function initializeSession() {
 
 async function handleTelegramError(error: Error) {
   console.error("Telegram error:", error);
+
   if (
     error.message.includes("ECONNREFUSED") ||
     error.message.includes("TIMEOUT")
@@ -152,6 +153,35 @@ async function restartService() {
     console.log("Service restarted successfully.");
   } catch (error) {
     console.error("Error restarting service:", error);
+  }
+}
+
+async function retryConnection() {
+  let retries = 0;
+  let connected = false;
+
+  while (!connected && retries < MAX_RETRIES) {
+    try {
+      await startClient();
+      console.log("Service restarted successfully.");
+      connected = true;
+    } catch (error) {
+      console.error(`Retry attempt ${retries + 1} failed:`, error);
+      retries++;
+      await wait(retryInterval);
+      retryInterval *= 2; // Exponential backoff
+    }
+  }
+
+  if (!connected) {
+    console.error("Max retries reached. Unable to restart service. Exiting...");
+    try {
+      await restartService();
+    } catch (error) {
+      console.error("Error restarting service:", error);
+    }
+  } else {
+    retryInterval = INITIAL_RETRY_INTERVAL; // Reset backoff interval on successful connection
   }
 }
 
@@ -253,16 +283,12 @@ async function forwardMessage(message: any, destination: string) {
   try {
     if (!client) throw new Error("Client is not initialized");
 
-    const destinationEntity = await client.getEntity(destination);
-
-    await client.forwardMessages(destinationEntity, {
-      fromPeer: message.peerId,
-      messages: [message.id],
-    });
-
-    console.log(`Message forwarded to ${destination} successfully`);
+    const destinationPeer = await client.getEntity(destination);
+    await client.sendMessage(destinationPeer, { message: message.message });
+    console.log("Message forwarded successfully.");
   } catch (error) {
-    console.error(`Error forwarding message to ${destination}:`, error);
+    console.error("Error forwarding message:", error);
+    handleTelegramError(error as Error);
   }
 }
 
@@ -314,166 +340,67 @@ async function sendMessageToDestinationChannel() {
   }
 }
 
-async function retryConnection() {
-  let retries = 0;
-  let connected = false;
-
-  while (!connected && retries < MAX_RETRIES) {
-    try {
-      await startClient();
-      console.log("Service restarted successfully.");
-      connected = true;
-    } catch (error) {
-      console.error(`Retry attempt ${retries + 1} failed:`, error);
-      retries++;
-      await wait(retryInterval);
-      retryInterval *= 2; // Exponential backoff
-    }
-  }
-
-  if (!connected) {
-    console.error("Max retries reached. Unable to restart service. Exiting...");
-    try {
-      await restartService();
-    } catch (error) {
-      console.error("Error restarting Docker container:", error);
-    }
-  } else {
-    retryInterval = INITIAL_RETRY_INTERVAL;
-  }
-}
-
-async function startService() {
+async function healthCheck(req: Request, res: Response) {
   try {
-    expressServer = express();
-    expressServer.use(express.json());
-
-    // Health check endpoint
-    expressServer.get("/health", (req: Request, res: Response) => {
-      res.status(200).send("OK");
-    });
-
-    expressServer.get("/", (req: Request, res: Response) => {
-      const resultData = responseResult.result;
-      const username = responseResult.username;
-      const summaryData = processH25Response(resultData); // Assuming you have access to this function
-
-      res.send(`
-        <html>
-          <head><title>Telegram Forwarder Service</title></head>
-          <body>
-            <h1>Telegram Forwarder Service</h1>
-            <p>Service is running and ready to forward messages.</p>
-            <h2>Bonus Code H25 Response User ${username}</h2>
-            <h3>Summary</h3>
-            <ul>
-              <li>Success Count: ${summaryData.success.count}</li>
-              <li>Success Orders: ${summaryData.success.orders.join(", ")}</li>
-              <li>Failure Count: ${summaryData.failure.count}</li>
-              <li>Failure Details: 
-                <ul>
-                  ${Object.entries(summaryData.failure.details)
-                    .map(
-                      ([message, count]) => `
-                    <li>${message}: ${count}</li>`
-                    )
-                    .join("")}
-                </ul>
-              </li>
-            </ul>
-            <h3>Individual Results</h3>
-            <ul>
-              ${resultData
-                .map(
-                  (
-                    result: { code: any; message: any; data: any },
-                    index: number
-                  ) => `
-                <li>
-                  <b>Result ${index + 1}</b><br>
-                  <b>Code:</b> ${result.code}<br>
-                  <b>Message:</b> ${result.message}<br>
-                  <b>Details:</b> ${JSON.stringify(result.data)}<br>
-                </li>`
-                )
-                .join("")}
-            </ul>
-          </body>
-        </html>
-      `);
-    });
-
-    expressServer = expressServer.listen(port, () => {
-      console.log(`Server listening on port ${port}`);
-    });
-
-    return expressServer; // Return the Express server instance
+    const response = await axiosInstance.get("/");
+    if (response.status === 200) {
+      res.status(200).send("Service is healthy");
+    } else {
+      res.status(500).send("Service is unhealthy");
+    }
   } catch (error) {
-    console.error("Service initialization error:", error);
-    handleTelegramError(error as Error); // Use type assertion if necessary
-  }
-}
-
-async function checkServiceHealth() {
-  return new Promise((resolve) => {
-    const net = require("net");
-    const server = net.createServer();
-
-    server.once("error", () => {
-      // If an error occurs, the service is likely not healthy
-      resolve(false);
-    });
-
-    server.once("listening", () => {
-      // If the server is listening, it indicates that the service is healthy
-      server.close();
-      resolve(true);
-    });
-
-    server.listen(port, "0.0.0.0");
-  });
-}
-
-async function monitorServiceHealth() {
-  // Monitor service health and restart if necessary
-  if (await checkServiceHealth()) {
-    console.log("Service is healthy.");
-  } else {
-    console.log("Service is not responding. Restarting...");
-    await restartService();
+    res.status(500).send("Service is unhealthy");
   }
 }
 
 async function initializeService() {
   try {
-    console.log("Initializing service...");
-
+    axiosInstance = await initializeAxiosInstance();
+    await checkNetworkConnectivity();
     await startClient();
-    await monitorServiceHealth(); // Check service health before starting
 
-    expressServer = await startService(); // Store the Express server instance
-    console.log("Service initialized successfully.");
+    const app = express();
+
+    app.get("/health", healthCheck);
+    expressServer = app.listen(port, () => {
+      console.log(`Server is running on port ${port}`);
+    });
+
+    process.on("SIGINT", () => {
+      console.log("Received SIGINT. Exiting gracefully...");
+      if (expressServer) expressServer.close();
+      if (client) client.disconnect();
+      process.exit(0);
+    });
+
+    process.on("unhandledRejection", (reason, promise) => {
+      console.error("Unhandled Rejection at:", promise, "reason:", reason);
+    });
+
+    process.on("uncaughtException", (error) => {
+      console.error("Uncaught Exception:", error);
+      if (
+        error.message.includes("Conflict") ||
+        error.message.includes("ECONNREFUSED") ||
+        error.message.includes("TIMEOUT")
+      ) {
+        console.log("Critical error detected. Restarting service...");
+        restartService();
+      } else {
+        console.log("Unhandled exception. Exiting...");
+        process.exit(1);
+      }
+    });
   } catch (error) {
-    console.error("Failed to initialize service:", error);
+    console.error("Error initializing service:", error);
+    setTimeout(initializeService, retryInterval);
   }
 }
 
-async function wait(ms: number): Promise<void> {
+function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-(async () => {
-  try {
-    axiosInstance = await initializeAxiosInstance();
-    await initializeService();
-    monitorServiceHealth();
-    setInterval(async () => {
-      if (!(await checkNetworkConnectivity())) {
-        console.log("Network connectivity lost. Attempting to reconnect...");
-        await initializeService();
-      }
-    }, 60000); // Check network connectivity every minute
-  } catch (error) {
-    console.error("Error in initialization:", error);
-  }
-})();
+initializeService().catch((error) => {
+  console.error("Error initializing service:", error);
+});

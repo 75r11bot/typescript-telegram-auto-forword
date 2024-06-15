@@ -22,7 +22,7 @@ services:
       - PLATFORM_TYPE=${PLATFORM_TYPE}
       - DEVICE_CODE=${DEVICE_CODE}
       - SIGN=${SIGN}
-      - BASE_URL=host.intanal.docker:5003
+      - BASE_URL=http://localhost:5003
       - H25_USER=noon75
       - H25_PASSWORD=nnnn9331
       - URL_LOGIN_APP=${URL_LOGIN_APP}

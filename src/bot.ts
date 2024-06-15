@@ -10,7 +10,9 @@ import {
 const botToken = siteConfig.botToken;
 const resultChannelId = process.env.RESULT_CHANNEL_ID || "";
 const sourceChannelId = process.env.SOURCE_CHANNEL_ID || "";
-
+const sourceChannelIds = process.env.SOURCE_CHANNEL_IDS
+  ? process.env.SOURCE_CHANNEL_IDS.split(",").map((id) => id.trim())
+  : [];
 let lastProcessedMessage: string | null = null; // Variable to store last processed message
 let botStarted = false;
 
@@ -42,6 +44,10 @@ async function initializeBot(axiosInstance: AxiosInstance) {
       console.log("Bot received new message caption:", message.caption);
 
       if (message.caption !== lastProcessedMessage) {
+        if (sourceChannelIds.includes(message.chat.id)) {
+          console.log("Forwarding the message to the destination channel");
+          await processBonusCode(axiosInstance, message.caption);
+        }
         await processBonusCode(axiosInstance, message.caption);
         lastProcessedMessage = message.caption;
       } else {
