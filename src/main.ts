@@ -252,6 +252,8 @@ async function forwardNewMessages(axiosInstance: AxiosInstance) {
           if (sourceChannelIds.includes(channelId)) {
             console.log("Forwarding the message to the destination channel");
             await forwardMessage(message, destinationChannelId);
+          } else {
+            console.log(`Channel ID ${channelId} not in sourceChannelIds`);
           }
         } else if (peer instanceof Api.PeerChat) {
           const chatId = `-${peer.chatId.toString()}`;
