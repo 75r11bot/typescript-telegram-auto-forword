@@ -150,6 +150,7 @@ async function restartService() {
     console.log("Service restarted successfully.");
   } catch (error) {
     console.error("Error restarting service:", error);
+    setTimeout(restartService, retryInterval);
   }
 }
 
@@ -245,17 +246,26 @@ async function forwardNewMessages(axiosInstance: AxiosInstance) {
         if (peer instanceof Api.PeerChannel) {
           const channelId = `-100${peer.channelId.toString()}`;
           console.log("Channel ID as string:", channelId);
-
-          if (sourceChannelIds.includes(channelId)) {
-            console.log("Forwarding the message to the destination channel");
+          if (!destinationsChannelIds.includes(channelId)) {
+            console.log("PeerChannel Forward Message Process");
             await forwardMessage(message, destinationChannelId);
+          }
+
+          if (
+            sourceChannelIds.includes(channelId) ||
+            sourceChannelIds.includes(peer.channelId.toString())
+          ) {
+            if (!destinationsChannelIds.includes(channelId)) {
+              console.log("In sourceChannelIds Forward Message Process");
+              await forwardMessage(message, destinationChannelId);
+            }
           } else {
             console.log(`Channel ID ${channelId} not in sourceChannelIds`);
           }
         } else if (peer instanceof Api.PeerChat) {
           const chatId = `-${peer.chatId.toString()}`;
           if (!destinationsChannelIds.includes(chatId)) {
-            console.log("Forward Message Procress");
+            console.log("PeerChat Forward Message Process");
             await forwardMessage(message, destinationChannelId);
           }
         } else if (peer instanceof Api.PeerUser) {
@@ -290,29 +300,25 @@ async function forwardMessage(message: any, destination: string) {
     handleTelegramError(error as Error);
   }
 }
-
-// Update the sendResultMessage function to use the defined type
 async function sendResultMessage(responseResult: any): Promise<void> {
   try {
-    if (!client) throw new Error("Client is not initialized"); // Ensure client is initialized
+    if (!client) await initializeClient(); // Ensure client is initialized
 
-    const resultEntity = await client.getEntity(resultChannelId);
+    const resultEntity = await client!.getEntity(resultChannelId);
     const resultData = responseResult.result;
     const username = responseResult.username;
     const summaryData = processH25Response(resultData);
 
     if (resultData.length > 0) {
       const formattedResponse = resultData
-        .map(
-          (result: { code: any; message: any; data: any }, index: number) => {
-            return (
-              `**Result ${index + 1}**\n` +
-              `Code: \`${result.code}\`\n` +
-              `Message: \`${result.message}\`\n` +
-              `Details: \`${JSON.stringify(result.data, null, 2)}\`\n`
-            );
-          }
-        )
+        .map((result: any, index: number) => {
+          return (
+            `**Result ${index + 1}**\n` +
+            `Code: \`${result.code}\`\n` +
+            `Message: \`${result.message}\`\n` +
+            `Details: \`${JSON.stringify(result.data, null, 2)}\`\n`
+          );
+        })
         .join("\n");
 
       const summaryResponse =
@@ -323,7 +329,7 @@ async function sendResultMessage(responseResult: any): Promise<void> {
 
       const responseMessage = `Bonus Code H25 Response User ${username}\n${summaryResponse}\n\n${formattedResponse}`;
 
-      await client.sendMessage(resultEntity, {
+      await client!.sendMessage(resultEntity, {
         message: responseMessage,
         parseMode: "markdown",
       });
@@ -335,8 +341,11 @@ async function sendResultMessage(responseResult: any): Promise<void> {
       `Error sending response message to ${resultChannelId}:`,
       error
     );
+    handleTelegramError(error as Error); // Handle the error using your error handling function
   }
 }
+
+// Assuming the rest of your code remains unchanged
 
 async function healthCheck(req: Request, res: Response) {
   try {

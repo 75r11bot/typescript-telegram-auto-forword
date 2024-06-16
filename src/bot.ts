@@ -90,8 +90,8 @@ async function botSendMessageToDestinationChannel(
         Failure : ${summaryData.failure.count}
         `;
 
-      let responseMessage = `Bonus Code H25 Response User: ${username}\n${summaryResponse}\n\n${formattedResponse}`;
-
+      // let responseMessage = `Bonus Code H25 Response User: ${username}\n${summaryResponse}\n\n${formattedResponse}`;
+      let responseMessage = `Bonus Code H25 Response User: ${username}\n${summaryResponse}\n\n`;
       // Validate message length against Telegram's limits (4096 characters)
       if (responseMessage.length > 4096) {
         console.warn(
