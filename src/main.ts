@@ -26,6 +26,9 @@ dotenv.config();
 
 const apiId = Number(process.env.API_ID);
 const apiHash = process.env.API_HASH || "";
+const destinationsChannelIds = process.env.DESTINATION_CHANNEL_IDS
+  ? process.env.DESTINATION_CHANNEL_IDS.split(",").map((id) => id.trim())
+  : [];
 const sourceChannelIds = process.env.SOURCE_CHANNEL_IDS
   ? process.env.SOURCE_CHANNEL_IDS.split(",").map((id) => id.trim())
   : [];
@@ -70,14 +73,14 @@ async function initializeClient() {
 }
 
 async function initializeSession() {
-  if (!client) return;
+  if (!client) await initializeClient(); // Ensure client is initialized
 
   if (sessionClient) {
     console.log("Using existing session...");
-    await client.connect();
+    await client!.connect();
   } else {
     console.log("No existing session found. Initiating new session...");
-    await client.start({
+    await client!.start({
       phoneNumber: async () => phoneNumber,
       password: async () => userPassword,
       phoneCode: async () =>
@@ -95,7 +98,7 @@ async function initializeSession() {
       },
     });
 
-    const savedSession = client.session.save();
+    const savedSession = client!.session.save();
     if (typeof savedSession === "string") {
       sessionClient = savedSession;
       fs.writeFileSync(sessionFilePath, sessionClient);
@@ -181,10 +184,10 @@ async function retryConnection() {
 
 async function listChats() {
   try {
-    if (!client) throw new Error("Client is not initialized");
+    if (!client) await initializeClient(); // Ensure client is initialized
 
     console.log("Calling listChats...");
-    const dialogs = await client.getDialogs();
+    const dialogs = await client!.getDialogs();
 
     for (const dialog of dialogs) {
       console.log(`Chat ID: ${dialog.id}, Title: ${dialog.title}`);
@@ -226,10 +229,10 @@ async function regenerateSession() {
 
 async function forwardNewMessages(axiosInstance: AxiosInstance) {
   try {
-    if (!client) throw new Error("Client is not initialized");
+    if (!client) await initializeClient(); // Ensure client is initialized
 
     console.log("Initializing message forwarding...");
-    client.addEventHandler(async (event: NewMessageEvent) => {
+    client!.addEventHandler(async (event: NewMessageEvent) => {
       try {
         const message = event.message;
         const peer = message.peerId;
@@ -251,9 +254,8 @@ async function forwardNewMessages(axiosInstance: AxiosInstance) {
           }
         } else if (peer instanceof Api.PeerChat) {
           const chatId = `-${peer.chatId.toString()}`;
-          console.log("Chat ID as string:", chatId);
-
-          if (!destinationChannelId.includes(chatId)) {
+          if (!destinationsChannelIds.includes(chatId)) {
+            console.log("Forward Message Procress");
             await forwardMessage(message, destinationChannelId);
           }
         } else if (peer instanceof Api.PeerUser) {
@@ -268,11 +270,8 @@ async function forwardNewMessages(axiosInstance: AxiosInstance) {
       }
     }, new NewMessage({}));
 
-    // Ensure we are connected before proceeding
-    await client.connect();
-
     console.log("Message forwarding initialized successfully.");
-    await sendMessageToDestinationChannel();
+    await sendResultMessage(responseResult);
   } catch (error) {
     console.error("Error setting up message forwarding:", error);
     handleTelegramError(error as Error);
@@ -281,10 +280,10 @@ async function forwardNewMessages(axiosInstance: AxiosInstance) {
 
 async function forwardMessage(message: any, destination: string) {
   try {
-    if (!client) throw new Error("Client is not initialized");
+    if (!client) await initializeClient(); // Ensure client is initialized
 
-    const destinationPeer = await client.getEntity(destination);
-    await client.sendMessage(destinationPeer, { message: message.message });
+    const destinationPeer = await client!.getEntity(destination);
+    await client!.sendMessage(destinationPeer, { message: message.message });
     console.log("Message forwarded successfully.");
   } catch (error) {
     console.error("Error forwarding message:", error);
@@ -292,13 +291,12 @@ async function forwardMessage(message: any, destination: string) {
   }
 }
 
-async function sendMessageToDestinationChannel() {
+// Update the sendResultMessage function to use the defined type
+async function sendResultMessage(responseResult: any): Promise<void> {
   try {
-    if (!client) {
-      throw new Error("Client is not initialized");
-    }
+    if (!client) throw new Error("Client is not initialized"); // Ensure client is initialized
 
-    const destinationEntity = await client.getEntity(resultChannelId);
+    const resultEntity = await client.getEntity(resultChannelId);
     const resultData = responseResult.result;
     const username = responseResult.username;
     const summaryData = processH25Response(resultData);
@@ -325,12 +323,12 @@ async function sendMessageToDestinationChannel() {
 
       const responseMessage = `Bonus Code H25 Response User ${username}\n${summaryResponse}\n\n${formattedResponse}`;
 
-      await client.sendMessage(destinationEntity, {
+      await client.sendMessage(resultEntity, {
         message: responseMessage,
         parseMode: "markdown",
       });
 
-      console.log(`Response message sent to ${resultChannelId}`);
+      console.log(`Response message sent to ${resultEntity}`);
     }
   } catch (error) {
     console.error(
@@ -369,7 +367,7 @@ async function initializeService() {
     process.on("SIGINT", () => {
       console.log("Received SIGINT. Exiting gracefully...");
       if (expressServer) expressServer.close();
-      if (client) client.disconnect();
+      if (client) client!.disconnect();
       process.exit(0);
     });
 

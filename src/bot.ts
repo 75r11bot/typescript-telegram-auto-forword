@@ -40,21 +40,20 @@ async function initializeBot(axiosInstance: AxiosInstance) {
     }
 
     if (message.caption !== undefined) {
-      console.log("Bot received new message caption:", message.caption);
-
       if (message.caption !== lastProcessedMessage) {
-        if (sourceChannelIds.includes(message.chat.id.toString())) {
-          console.log("Forwarding the message to the destination channel");
+        if (
+          sourceChannelIds.includes(message.forward_origin.chat.id.toString())
+        ) {
+          console.log("Bot Process Bonus Code call h25 Api ");
           await processBonusCode(axiosInstance, message.caption);
         }
+        // await processBonusCode(axiosInstance, message.caption);
         lastProcessedMessage = message.caption;
       } else {
         console.log(
           "Skipping processBonusCode as caption is the same as previous."
         );
       }
-    } else if (message.text !== undefined) {
-      console.log("Bot received new message text:", message.text);
     }
 
     await botSendMessageToDestinationChannel(bot);
