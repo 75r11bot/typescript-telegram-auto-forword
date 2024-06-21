@@ -13,6 +13,7 @@ services:
       - DESTINATION_CHANNEL_ID=${DESTINATION_CHANNEL_ID}
       - SOURCE_CHANNEL_ID=${SOURCE_CHANNEL_ID}
       - SOURCE_CHANNEL_IDS=${SOURCE_CHANNEL_IDS}
+      - DESTINATION_CHANNEL_IDS=${DESTINATION_CHANNEL_IDS}
       - RESPONSE_CHANNEL_ID=${RESPONSE_CHANNEL_ID}
       - APP_YOUR_PWD=${APP_YOUR_PWD}
       - API_ENDPOINT_1=${API_ENDPOINT_1}
@@ -22,16 +23,18 @@ services:
       - PLATFORM_TYPE=${PLATFORM_TYPE}
       - DEVICE_CODE=${DEVICE_CODE}
       - SIGN=${SIGN}
-      - BASE_URL=host.intanal.docker:5003
+      - BASE_URL=http://localhost:5003
       - H25_USER=noon75
       - H25_PASSWORD=nnnn9331
-      - H25_TOKEN=96c33936cfce4176a4291a645aeb336f
+      - URL_LOGIN_APP=${URL_LOGIN_APP}
+      - URL_LOGIN_WEB=${URL_LOGIN_WEB}
+      - BOT_RESULT_CHANNEL_ID=${BOT_RESULT_CHANNEL_ID}
     volumes:
       - .:/usr/src/app
       - ./sessions:/usr/src/app/sessions
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "curl -f host.intanal.docker:5003/ || exit 1"]
+      test: ["CMD-SHELL", "curl -f ${BASE_URL} || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -247,14 +247,14 @@ async function getH25Token(user: string, password: string) {
     const context = await browser.newContext();
     let page = await context.newPage();
 
-    const url = "https://75rapp.com/client.html";
+    const url = webLoginUrl;
     const isReady = await isUrlReady(url);
 
     let result;
     if (isReady) {
-      result = await loginAppCaptureResponse(page, user, password);
-    } else {
       result = await loginWebCaptureResponse(page, user, password);
+    } else {
+      result = await loginAppCaptureResponse(page, user, password);
     }
 
     token = result.token;
@@ -266,9 +266,9 @@ async function getH25Token(user: string, password: string) {
       page = await context.newPage();
       await page.waitForTimeout(5000);
       if (isReady) {
-        result = await loginAppCaptureResponse(page, user, password);
-      } else {
         result = await loginWebCaptureResponse(page, user, password);
+      } else {
+        result = await loginAppCaptureResponse(page, user, password);
       }
 
       token = result.token;
@@ -304,7 +304,7 @@ async function getH25TokenRequest(loginPayload: any, verify: any) {
 
   try {
     const response = await axios.post(
-      "https://75rapp.com/api/v/user/newLoginv2",
+      "https://h25gg.com/api/v/user/newLoginv2",
       formData,
       {
         headers: formData.getHeaders(),
