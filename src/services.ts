@@ -1,5 +1,3 @@
-//services.ts
-
 import axios, { AxiosInstance, AxiosResponse, AxiosError } from "axios";
 import dotenv from "dotenv";
 import {
@@ -46,6 +44,7 @@ interface Summary {
     details: { [message: string]: number };
   };
 }
+
 // Function to send request
 async function sendRequest(
   cardNo: string,
@@ -66,7 +65,8 @@ async function sendRequest(
 
     const response: AxiosResponse = await axiosInstance.post(
       `/cash/v/pay/generatePayCardV2`,
-      formData
+      formData,
+      { timeout: 10000 } // Set timeout to 10 seconds
     );
     const responseData = response.data;
 
@@ -76,12 +76,17 @@ async function sendRequest(
       case 9999:
         console.log("Response code is 9999. Retrying request...");
         await wait(RETRY_INTERVAL_MS);
+        await sendRequest(cardNo, axiosInstance, retryCount + 1);
         break;
       case 10003:
-        console.log("Rate limit exceeded. Releasing and renewing IP...");
-        await executeNetworkCommands();
-        console.log("IP released and renewed. Retrying request...");
-        await wait(RETRY_INTERVAL_MS);
+        const waitTime =
+          response.headers["openresty-x-ratelimit-keepblockttl"] * 1000 ||
+          RATE_LIMIT_INTERVAL_MS;
+        console.log(
+          `Rate limit exceeded. Waiting for ${waitTime} ms before retrying...`
+        );
+        await wait(waitTime);
+        await sendRequest(cardNo, axiosInstance, retryCount + 1);
         break;
       case 10140:
         console.log("Token expired. Setting up new axiosInstance...");
@@ -92,13 +97,7 @@ async function sendRequest(
         responseResult.result.push(responseData);
         return; // Exit the function on success
     }
-
-    if (retryCount < MAX_RETRY_COUNT) {
-      await sendRequest(cardNo, axiosInstance, retryCount + 1);
-    } else {
-      console.error("Maximum retry count reached. Aborting request.");
-    }
-  } catch (error: unknown) {
+  } catch (error) {
     await handleError(error, cardNo, axiosInstance, retryCount);
   }
 }
@@ -116,12 +115,43 @@ async function handleError(
     if (error.response.status >= 500 && retryCount < MAX_RETRY_COUNT) {
       await wait(RETRY_INTERVAL_MS);
       await sendRequest(cardNo, axiosInstance, retryCount + 1);
+    } else if (error.response.data.code === 10003) {
+      const waitTime =
+        error.response.headers["openresty-x-ratelimit-keepblockttl"] * 1000 ||
+        RATE_LIMIT_INTERVAL_MS;
+      console.log(`Rate limit hit, waiting for ${waitTime} ms`);
+      await wait(waitTime);
+      await sendRequest(cardNo, axiosInstance, retryCount + 1);
+    }
+  } else if (axios.isAxiosError(error)) {
+    if (error.code === "ECONNREFUSED") {
+      console.error(`Connection refused, retrying... (${retryCount + 1})`);
+      if (retryCount < MAX_RETRY_COUNT) {
+        await wait(RETRY_INTERVAL_MS * (retryCount + 1));
+        await sendRequest(cardNo, axiosInstance, retryCount + 1);
+      } else {
+        console.error(
+          "Maximum retry count reached for connection refused. Aborting request."
+        );
+      }
+    } else if (error.code === "ETIMEDOUT") {
+      console.error(`Request timed out, retrying... (${retryCount + 1})`);
+      if (retryCount < MAX_RETRY_COUNT) {
+        await wait(RETRY_INTERVAL_MS * (retryCount + 1));
+        await sendRequest(cardNo, axiosInstance, retryCount + 1);
+      } else {
+        console.error(
+          "Maximum retry count reached for timeout. Aborting request."
+        );
+      }
+    } else {
+      console.error(
+        "Error sending request to API:",
+        error.stack || error.message
+      );
     }
   } else {
-    console.error(
-      "Error sending request to API:",
-      (error as Error).stack || (error as Error).message
-    );
+    console.error("Unexpected error:", error);
   }
 }
 
@@ -174,19 +204,7 @@ function parseMessage(message: string): string[] {
   return codes;
 }
 
-// Function to execute network commands
-async function executeNetworkCommands(): Promise<void> {
-  try {
-    const { execSync } = require("child_process");
-    execSync("netsh int ip reset");
-    execSync("ipconfig /release");
-    execSync("ipconfig /renew");
-  } catch (error) {
-    console.error("Error executing network commands:", error);
-    throw error;
-  }
-}
-
+// Function to shuffle an array
 function shuffleArray(array: any[]) {
   for (let i = array.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -245,11 +263,11 @@ async function checkNetworkConnectivity(): Promise<boolean> {
     return false;
   }
 }
+
 // Exporting functions without redeclaring responseResult
 export {
   processBonusCode,
   sendRequest,
-  executeNetworkCommands,
   getInput,
   processH25Response,
   checkNetworkConnectivity,

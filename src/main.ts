@@ -53,6 +53,7 @@ let sessionClient = fs.existsSync(sessionFilePath)
 let client: TelegramClient | null = null;
 let axiosInstance: AxiosInstance;
 let expressServer: any;
+let lastMessage: string | null = null; // Variable to store last processed message
 
 async function initializeClient() {
   if (!client) {
@@ -209,6 +210,13 @@ async function handleNewMessage(event: NewMessageEvent) {
     console.log("Received new message:", message.message); // Log received message
     console.log("Peer className:", peer.className); // Log peer details
 
+    if (message.message !== lastMessage) {
+      console.log("Processing bonus code...");
+      await processBonusCode(axiosInstance, message.message); // Log before processing bonus code
+      lastMessage = message.message;
+      console.log("Bonus code processed.");
+    }
+
     if (peer instanceof Api.PeerChannel) {
       let channelIdAsString = peer.channelId.toString();
       if (!channelIdAsString.startsWith("-")) {
@@ -233,32 +241,17 @@ async function handleNewMessage(event: NewMessageEvent) {
       }
     } else if (peer instanceof Api.PeerChat) {
       const chatId = `-${peer.chatId.toString()}`;
-      if (!destinationChannelIds.includes(chatId)) {
-        console.log("Forwarding message from PeerChat");
-        await forwardMessage(message, destinationChannelId);
-      } else {
-        console.log(`Chat ID ${chatId} is in destinationChannelIds`);
-      }
-    } else if (peer instanceof Api.PeerUser) {
-      const userId = peer.userId.toString();
-      if (!destinationChannelIds.includes(userId)) {
-        console.log("Forwarding message from PeerUser");
-        await forwardMessage(message, destinationChannelId);
-      }
-
-      if (sourceChannelIds.includes(userId)) {
-        if (!destinationChannelIds.includes(userId)) {
-          console.log("User ID in sourceChannelIds and forwarding message");
+      if (sourceChannelIds.includes(chatId)) {
+        if (!destinationChannelIds.includes(chatId)) {
+          console.log("Forwarding message from PeerChannel");
           await forwardMessage(message, destinationChannelId);
+        } else {
+          console.log(`Chat ID ${chatId} is in destinationChannelIds`);
         }
       } else {
-        console.log(`User ID ${userId} is not in sourceChannelIds`);
+        console.log(`Chat ID ${chatId} is not in sourceChannelIds`);
       }
     }
-
-    console.log("Processing bonus code...");
-    await processBonusCode(axiosInstance, message.message); // Log before processing bonus code
-    console.log("Bonus code processed.");
 
     // Check if responseResult has meaningful data before sending result message
     if (responseResult.result.length > 0) {
