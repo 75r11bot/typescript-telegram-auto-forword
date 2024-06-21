@@ -28,7 +28,7 @@ services:
       - H25_PASSWORD=nnnn9331
       - URL_LOGIN_APP=${URL_LOGIN_APP}
       - URL_LOGIN_WEB=${URL_LOGIN_WEB}
-
+      - BOT_RESULT_CHANNEL_ID=${BOT_RESULT_CHANNEL_ID}
     volumes:
       - .:/usr/src/app
       - ./sessions:/usr/src/app/sessions

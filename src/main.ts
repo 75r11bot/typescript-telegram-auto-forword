@@ -11,7 +11,6 @@ import {
   initializeAxiosInstance,
   checkAxiosInstance,
 } from "./axios/axios.config";
-
 import {
   processBonusCode,
   responseResult,
@@ -26,7 +25,7 @@ dotenv.config();
 
 const apiId = Number(process.env.API_ID);
 const apiHash = process.env.API_HASH || "";
-const destinationsChannelIds = process.env.DESTINATION_CHANNEL_IDS
+const destinationChannelIds = process.env.DESTINATION_CHANNEL_IDS
   ? process.env.DESTINATION_CHANNEL_IDS.split(",").map((id) => id.trim())
   : [];
 const sourceChannelIds = process.env.SOURCE_CHANNEL_IDS
@@ -63,49 +62,57 @@ async function initializeClient() {
       apiHash,
       {
         connectionRetries: 5,
-        timeout: 120000, // Adjust timeout value (in milliseconds)
+        timeout: 120000,
         useWSS: true,
       }
     );
+  }
+
+  try {
     await client.connect();
     console.log("Telegram client initialized and connected.");
+  } catch (error) {
+    console.error("Error initializing Telegram client:", error);
+    handleTelegramError(error as Error);
   }
 }
 
-async function initializeSession() {
-  if (!client) await initializeClient(); // Ensure client is initialized
+async function startClient() {
+  try {
+    await initializeClient();
+    await initializeSession();
+    axiosInstance = await initializeAxiosInstance();
+    axiosInstance = await checkAxiosInstance(axiosInstance);
 
-  if (sessionClient) {
-    console.log("Using existing session...");
-    await client!.connect();
-  } else {
-    console.log("No existing session found. Initiating new session...");
-    await client!.start({
-      phoneNumber: async () => phoneNumber,
-      password: async () => userPassword,
-      phoneCode: async () =>
-        await getInput("Please enter the code you received: "),
-      onError: (err: Error) => {
-        if (err.message.includes("AUTH_KEY_DUPLICATED")) {
-          console.log(
-            "AUTH_KEY_DUPLICATED error detected. Regenerating session..."
-          );
-          regenerateSession();
-        } else {
-          console.log("Client start error:", err);
-          handleTelegramError(err);
-        }
-      },
+    if (!client) {
+      throw new Error("Telegram client is not initialized.");
+    }
+
+    const me = (await client.getEntity("me")) as Api.User;
+    const displayName = [me.firstName, me.lastName].filter(Boolean).join(" ");
+    console.log(`Signed in successfully as ${displayName}`);
+
+    const dialogs = await client.getDialogs();
+    dialogs.forEach((dialog) => {
+      console.log(`Chat ID: ${dialog.id}, Title: ${dialog.title}`);
     });
 
-    const savedSession = client!.session.save();
-    if (typeof savedSession === "string") {
-      sessionClient = savedSession;
-      fs.writeFileSync(sessionFilePath, sessionClient);
-      console.log("New session created and saved.");
-    } else {
-      console.error("Failed to save session. Expected a string.");
-    }
+    const newMessageFilter = new NewMessage({});
+    console.log("Initializing message forwarding...");
+    await client.addEventHandler(handleNewMessage, newMessageFilter);
+    console.log("Message forwarding initialized successfully.");
+
+    const allUpdatesFilter = new NewMessage({});
+    await client.addEventHandler((update) => {
+      console.log("Received message update:", update.message);
+    }, allUpdatesFilter);
+
+    await initializeBot(axiosInstance);
+
+    console.log("Telegram client initialized and fully operational.");
+  } catch (error) {
+    console.error("Failed to start client:", error);
+    handleTelegramError(error as Error);
   }
 }
 
@@ -114,16 +121,65 @@ async function handleTelegramError(error: Error) {
 
   if (
     error.message.includes("ECONNREFUSED") ||
-    error.message.includes("TIMEOUT")
+    error.message.includes("TIMEOUT") ||
+    error.message.includes("Not connected") ||
+    error.message.includes("Frame not found")
   ) {
-    console.log("Connection issue, retrying...");
+    console.warn("Connection issue, retrying...");
     retryConnection();
   } else if (error.message.includes("Conflict")) {
-    console.log("Conflict detected, restarting service...");
+    console.warn("Conflict detected, restarting service...");
     await restartService();
   } else {
-    console.log("Unhandled error, restarting client...");
+    console.error("Unhandled error, restarting client...");
     setTimeout(startClient, retryInterval);
+  }
+}
+
+async function initializeSession() {
+  if (!client) await initializeClient();
+
+  if (sessionClient) {
+    console.log("Using existing session...");
+    try {
+      await client!.connect();
+    } catch (error) {
+      console.error("Error using existing session:", error);
+      handleTelegramError(error as Error);
+    }
+  } else {
+    console.log("No existing session found. Initiating new session...");
+    try {
+      await client!.start({
+        phoneNumber: async () => phoneNumber,
+        password: async () => userPassword,
+        phoneCode: async () =>
+          await getInput("Please enter the code you received: "),
+        onError: (err: Error) => {
+          if (err.message.includes("AUTH_KEY_DUPLICATED")) {
+            console.log(
+              "AUTH_KEY_DUPLICATED error detected. Regenerating session..."
+            );
+            regenerateSession();
+          } else {
+            console.log("Client start error:", err);
+            handleTelegramError(err);
+          }
+        },
+      });
+
+      const savedSession = client!.session.save();
+      if (typeof savedSession === "string") {
+        sessionClient = savedSession;
+        fs.writeFileSync(sessionFilePath, sessionClient);
+        console.log("New session created and saved.");
+      } else {
+        console.error("Failed to save session. Expected a string.");
+      }
+    } catch (error) {
+      console.error("Error initiating new session:", error);
+      handleTelegramError(error as Error);
+    }
   }
 }
 
@@ -167,7 +223,7 @@ async function retryConnection() {
       console.error(`Retry attempt ${retries + 1} failed:`, error);
       retries++;
       await wait(retryInterval);
-      retryInterval *= 2; // Exponential backoff
+      retryInterval *= 2;
     }
   }
 
@@ -179,130 +235,96 @@ async function retryConnection() {
       console.error("Error restarting service:", error);
     }
   } else {
-    retryInterval = INITIAL_RETRY_INTERVAL; // Reset backoff interval on successful connection
+    retryInterval = INITIAL_RETRY_INTERVAL;
   }
 }
 
-async function listChats() {
+async function handleNewMessage(event: NewMessageEvent) {
   try {
-    if (!client) await initializeClient(); // Ensure client is initialized
+    console.log("handleNewMessage called"); // Initial log to indicate the function is called
+    const message = event.message;
+    const peer = message.peerId;
 
-    console.log("Calling listChats...");
-    const dialogs = await client!.getDialogs();
+    console.log("Received new message:", message.message); // Log received message
+    console.log("Peer details:", peer.className); // Log peer details
 
-    for (const dialog of dialogs) {
-      console.log(`Chat ID: ${dialog.id}, Title: ${dialog.title}`);
-    }
-  } catch (error) {
-    console.error("Error listing chats:", error);
-  }
-}
-
-async function startClient() {
-  try {
-    await initializeClient();
-    await initializeSession();
-    axiosInstance = await checkAxiosInstance(axiosInstance);
-
-    if (client) {
-      const me = (await client.getEntity("me")) as Api.User;
-      const displayName = [me.firstName, me.lastName].filter(Boolean).join(" ");
-      console.log(`Signed in Successfully as ${displayName}`);
-      await listChats();
-      await forwardNewMessages(axiosInstance);
-      await initializeBot(axiosInstance);
-    }
-  } catch (error) {
-    console.error("Failed to start client:", error);
-  }
-}
-
-async function regenerateSession() {
-  try {
-    console.log("Regenerating session...");
-    fs.unlinkSync(sessionFilePath);
-    await initializeSession();
-  } catch (error) {
-    console.error("Failed to regenerate session:", error);
-    setTimeout(regenerateSession, retryInterval);
-  }
-}
-
-async function forwardNewMessages(axiosInstance: AxiosInstance) {
-  try {
-    if (!client) await initializeClient(); // Ensure client is initialized
-
-    console.log("Initializing message forwarding...");
-    client!.addEventHandler(async (event: NewMessageEvent) => {
-      try {
-        const message = event.message;
-        const peer = message.peerId;
-
-        console.log("Received new message:", message.message);
-        console.log("Peer details:", peer);
-
-        await processBonusCode(axiosInstance, message.message);
-
-        if (peer instanceof Api.PeerChannel) {
-          const channelId = `-100${peer.channelId.toString()}`;
-          console.log("Channel ID as string:", channelId);
-          if (!destinationsChannelIds.includes(channelId)) {
-            console.log("PeerChannel Forward Message Process");
-            await forwardMessage(message, destinationChannelId);
-          }
-
-          if (
-            sourceChannelIds.includes(channelId) ||
-            sourceChannelIds.includes(peer.channelId.toString())
-          ) {
-            if (!destinationsChannelIds.includes(channelId)) {
-              console.log("In sourceChannelIds Forward Message Process");
-              await forwardMessage(message, destinationChannelId);
-            }
-          } else {
-            console.log(`Channel ID ${channelId} not in sourceChannelIds`);
-          }
-        } else if (peer instanceof Api.PeerChat) {
-          const chatId = `-${peer.chatId.toString()}`;
-          if (!destinationsChannelIds.includes(chatId)) {
-            console.log("PeerChat Forward Message Process");
-            await forwardMessage(message, destinationChannelId);
-          }
-        } else if (peer instanceof Api.PeerUser) {
-          const userId = peer.userId.toString();
-          console.log("User ID as string:", userId);
-        } else {
-          console.log("Unknown peer type, skipping this message.");
-        }
-      } catch (error) {
-        console.error("Error handling new message event:", error);
-        handleTelegramError(error as Error);
+    if (peer instanceof Api.PeerChannel) {
+      let channelIdAsString = peer.channelId.toString();
+      if (!channelIdAsString.startsWith("-")) {
+        channelIdAsString = `-100${channelIdAsString}`;
+      } else {
+        channelIdAsString = `-100${channelIdAsString.slice(1)}`;
       }
-    }, new NewMessage({}));
 
-    console.log("Message forwarding initialized successfully.");
-    await sendResultMessage(responseResult);
+      if (sourceChannelIds.includes(channelIdAsString)) {
+        if (!destinationChannelIds.includes(channelIdAsString)) {
+          console.log("PeerChat Forward Message Process");
+          await forwardMessage(message, destinationChannelId);
+        } else {
+          console.log(
+            `Channel ID ${channelIdAsString} in destinationChannelIds`
+          );
+        }
+      } else {
+        console.log(`Channel ID ${channelIdAsString} not in sourceChannelIds`);
+      }
+    } else if (peer instanceof Api.PeerChat) {
+      const chatId = `-${peer.chatId.toString()}`;
+      if (!destinationChannelIds.includes(chatId)) {
+        console.log("PeerChat Forward Message Process");
+        await forwardMessage(message, destinationChannelId);
+      } else {
+        console.log(`Chat ID ${chatId} in destinationChannelIds`);
+      }
+    } else if (peer instanceof Api.PeerUser) {
+      const userId = peer.userId.toString();
+      if (!destinationChannelIds.includes(userId)) {
+        console.log("PeerUser Forward Message Process");
+        await forwardMessage(message, destinationChannelId);
+      }
+
+      if (sourceChannelIds.includes(userId)) {
+        if (!destinationChannelIds.includes(userId)) {
+          console.log("In sourceChannelIds Forward Message Process");
+          await forwardMessage(message, destinationChannelId);
+        }
+      } else {
+        console.log(`User ID ${userId} not in sourceChannelIds`);
+      }
+    }
+
+    console.log("Processing bonus code...");
+    await processBonusCode(axiosInstance, message.message); // Log before processing bonus code
+    console.log("Bonus code processed.");
+
+    console.log("Sending result message...");
+    await sendResultMessage(responseResult); // Log before sending result message
+    console.log("Result message sent.");
   } catch (error) {
-    console.error("Error setting up message forwarding:", error);
+    console.error("Error in handleNewMessage:", error); // Log error if it occurs
     handleTelegramError(error as Error);
   }
 }
 
-async function forwardMessage(message: any, destination: string) {
+async function forwardMessage(
+  message: Api.Message,
+  destinationChannelId: string
+) {
   try {
-    if (!client) await initializeClient(); // Ensure client is initialized
-
-    const destinationPeer = await client!.getEntity(destination);
-    await client!.sendMessage(destinationPeer, { message: message.message });
+    const destinationPeer = await client!.getEntity(destinationChannelId);
+    await client!.sendMessage(destinationPeer, {
+      message: message.message,
+    });
     console.log("Message forwarded successfully.");
   } catch (error) {
     console.error("Error forwarding message:", error);
     handleTelegramError(error as Error);
   }
 }
+
 async function sendResultMessage(responseResult: any): Promise<void> {
   try {
-    if (!client) await initializeClient(); // Ensure client is initialized
+    if (!client) await initializeClient();
 
     const resultEntity = await client!.getEntity(resultChannelId);
     const resultData = responseResult.result;
@@ -341,11 +363,9 @@ async function sendResultMessage(responseResult: any): Promise<void> {
       `Error sending response message to ${resultChannelId}:`,
       error
     );
-    handleTelegramError(error as Error); // Handle the error using your error handling function
+    handleTelegramError(error as Error);
   }
 }
-
-// Assuming the rest of your code remains unchanged
 
 async function healthCheck(req: Request, res: Response) {
   try {
@@ -363,7 +383,20 @@ async function healthCheck(req: Request, res: Response) {
 async function initializeService() {
   try {
     axiosInstance = await initializeAxiosInstance();
-    await checkNetworkConnectivity();
+
+    while (true) {
+      const isConnected = await checkNetworkConnectivity();
+      if (isConnected) {
+        console.log(
+          "Network connectivity restored. Proceeding with service initialization..."
+        );
+        break;
+      } else {
+        console.error("No network connectivity. Retrying in 10 seconds...");
+        await wait(10000);
+      }
+    }
+
     await startClient();
 
     const app = express();
@@ -389,7 +422,8 @@ async function initializeService() {
       if (
         error.message.includes("Conflict") ||
         error.message.includes("ECONNREFUSED") ||
-        error.message.includes("TIMEOUT")
+        error.message.includes("TIMEOUT") ||
+        error.message.includes("Frame not found")
       ) {
         console.log("Critical error detected. Restarting service...");
         restartService();
@@ -404,10 +438,20 @@ async function initializeService() {
   }
 }
 
-function wait(ms: number) {
+function regenerateSession() {
+  console.log("Regenerating session...");
+  if (fs.existsSync(sessionFilePath)) {
+    fs.unlinkSync(sessionFilePath);
+  }
+  sessionClient = "";
+  initializeSession().catch((error) => {
+    console.error("Error re-initializing session:", error);
+    setTimeout(initializeSession, retryInterval);
+  });
+}
+
+function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-initializeService().catch((error) => {
-  console.error("Error initializing service:", error);
-});
+initializeService();

@@ -8,7 +8,7 @@ import {
   responseResult,
 } from "./services";
 const botToken = siteConfig.botToken;
-const resultChannelId = process.env.RESULT_CHANNEL_ID || "";
+const botResultChannelId = process.env.BOT_RESULT_CHANNEL_ID || "";
 const sourceChannelIds = process.env.SOURCE_CHANNEL_IDS
   ? process.env.SOURCE_CHANNEL_IDS.split(",").map((id) => id.trim())
   : [];
@@ -46,6 +46,7 @@ async function initializeBot(axiosInstance: AxiosInstance) {
         ) {
           console.log("Bot Process Bonus Code call h25 Api ");
           await processBonusCode(axiosInstance, message.caption);
+          await botSendMessageToDestinationChannel(bot);
         }
         // await processBonusCode(axiosInstance, message.caption);
         lastProcessedMessage = message.caption;
@@ -55,8 +56,6 @@ async function initializeBot(axiosInstance: AxiosInstance) {
         );
       }
     }
-
-    await botSendMessageToDestinationChannel(bot);
   });
 
   bot
@@ -100,15 +99,15 @@ async function botSendMessageToDestinationChannel(
         responseMessage = responseMessage.substring(0, 4096); // Truncate message to fit Telegram's limit
       }
 
-      await bot.telegram.sendMessage(resultChannelId, responseMessage, {
+      await bot.telegram.sendMessage(botResultChannelId, responseMessage, {
         parse_mode: "Markdown",
       });
 
-      console.log(`Response message sent to ${resultChannelId}`);
+      console.log(`Response message sent to ${botResultChannelId}`);
     }
   } catch (error) {
     console.error(
-      `Error sending response message to ${resultChannelId}:`,
+      `Error sending response message to ${botResultChannelId}:`,
       error
     );
   }
