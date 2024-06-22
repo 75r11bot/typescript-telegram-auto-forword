@@ -2,15 +2,17 @@ import { Page, chromium } from "playwright";
 import dotenv from "dotenv";
 import fs from "fs";
 import axios from "axios";
-import FormData from "form-data";
 import querystring from "querystring";
 import { createWorker as tesseractCreateWorker, Worker } from "tesseract.js";
 
 dotenv.config();
 
-const webLoginUrl = process.env.URL_LOGIN_WEB || "https://h25gg.com/#/index";
-const appLoginUrl =
-  process.env.URL_LOGIN_APP || "https://75rapp.com/client.html";
+const endpoints = [
+  process.env.API_ENDPOINT_1,
+  process.env.API_ENDPOINT_2,
+  process.env.API_ENDPOINT_3,
+  process.env.API_ENDPOINT_4,
+].filter(Boolean) as string[];
 
 async function createTesseractWorker(): Promise<Worker> {
   try {
@@ -43,108 +45,11 @@ async function extractTextFromImage(imagePath: string): Promise<string> {
   }
 }
 
-async function loginAppCaptureResponse(
-  page: Page,
-  user: string,
-  password: string
-): Promise<{
-  verifyCode: string | null;
-  token: string | null;
-  payload: any | null;
-}> {
-  let token: string | null = null;
-  let verifyCode: string | null = null;
-  let loginPayload: any | null = null;
-
-  try {
-    await page.goto(appLoginUrl, { timeout: 60000 });
-
-    page.on("response", async (response) => {
-      if (response.url().includes("/api/v/user/getVerifyCode?")) {
-        const buffer = await response.body();
-        console.log("Response from verify code API: received binary data");
-
-        const imagePath = "./captcha.png";
-        fs.writeFileSync(imagePath, buffer);
-
-        verifyCode = await extractTextFromImage(imagePath);
-        verifyCode = verifyCode.replace(/'/g, "");
-
-        console.log(`Extracted verify code: ${verifyCode}`);
-      }
-
-      if (response.url().includes("/api/v/user/newLoginv2")) {
-        const responseBody = await response.text();
-        const jsonResponse = JSON.parse(responseBody);
-        if (
-          jsonResponse.code === 10000 &&
-          jsonResponse.data &&
-          jsonResponse.data.token
-        ) {
-          token = jsonResponse.data.token;
-        }
-      }
-    });
-
-    page.on("request", async (request) => {
-      if (request.url().includes("/api/v/user/newLoginv2")) {
-        const postData = request.postData();
-        if (postData) {
-          loginPayload = querystring.parse(postData);
-        }
-      }
-    });
-
-    const iframe = page.frameLocator("#iframe");
-
-    await iframe.getByRole("button", { name: "" }).click();
-    await iframe.getByText("×").click();
-    await iframe.locator("span").filter({ hasText: "ลงชื่อเข้าใช้" }).click();
-    await iframe
-      .getByPlaceholder("ชื่อผู้ใช้ (ตัวอักษรคำนึงถึงตัวพิมพ์เล็กและใหญ่)")
-      .fill(user);
-    await iframe
-      .getByRole("textbox", {
-        name: "รหัสผ่าน (ตัวอักษรคำนึงถึงตัวพิมพ์เล็กและใหญ่)",
-      })
-      .fill(password);
-    await page.waitForTimeout(3000);
-
-    if (verifyCode) {
-      await iframe.getByRole("textbox").nth(4).fill(verifyCode);
-    }
-
-    const rememberMeCheckbox = iframe.getByRole("checkbox", {
-      name: " จำชื่อผู้ใช้และรหัสผ่าน",
-    });
-    const isChecked = await rememberMeCheckbox.isChecked();
-    if (!isChecked) {
-      await rememberMeCheckbox.click();
-    }
-
-    await iframe
-      .getByRole("button", { name: "ลงชื่อเข้าใช้", exact: true })
-      .click();
-    await page.waitForTimeout(5000);
-
-    const frame = page.frame({ name: "iframe" });
-    if (frame) {
-      await frame.waitForLoadState("domcontentloaded");
-      await frame.waitForTimeout(3000);
-    } else {
-      console.error("Frame not found");
-    }
-  } catch (error) {
-    console.error("Error occurred during login:", error);
-  }
-
-  return { token, payload: loginPayload, verifyCode };
-}
-
 async function loginWebCaptureResponse(
   page: Page,
   user: string,
-  password: string
+  password: string,
+  url: string
 ): Promise<{
   verifyCode: string | null;
   token: string | null;
@@ -155,7 +60,7 @@ async function loginWebCaptureResponse(
   let loginPayload: any | null = null;
 
   try {
-    await page.goto(webLoginUrl, {
+    await page.goto(url, {
       waitUntil: "load",
       timeout: 90000,
     });
@@ -227,7 +132,7 @@ async function loginWebCaptureResponse(
 
 async function isUrlReady(url: string): Promise<boolean> {
   try {
-    const response = await axios.get(url);
+    const response = await axios.get(url, { timeout: 5000 });
     return response.status === 200;
   } catch (error) {
     console.error(`Error checking URL status: ${error}`);
@@ -235,7 +140,10 @@ async function isUrlReady(url: string): Promise<boolean> {
   }
 }
 
-async function getH25Token(user: string, password: string) {
+async function getH25Token(
+  user: string,
+  password: string
+): Promise<string | null> {
   let token: string | null = null;
   let payload: any | null = null;
   let verify: string | null = null;
@@ -248,16 +156,23 @@ async function getH25Token(user: string, password: string) {
     });
     context = await browser.newContext();
     let page = await context.newPage();
+    let loginPage: string | undefined;
 
-    const url = webLoginUrl;
-    const isReady = await isUrlReady(url);
-
-    let result;
-    if (isReady) {
-      result = await loginWebCaptureResponse(page, user, password);
-    } else {
-      result = await loginAppCaptureResponse(page, user, password);
+    for (const endpoint of endpoints) {
+      const loginUrl = endpoint.replace("/api", "/#/index");
+      const isReady = await isUrlReady(loginUrl);
+      if (isReady) {
+        loginPage = loginUrl;
+        break;
+      }
     }
+
+    if (!loginPage) {
+      console.error("No ready login URL found.");
+      return null;
+    }
+
+    let result = await loginWebCaptureResponse(page, user, password, loginPage);
 
     token = result.token;
     payload = result.payload;
@@ -267,12 +182,22 @@ async function getH25Token(user: string, password: string) {
       await page.close();
       page = await context.newPage();
       await page.waitForTimeout(5000);
-      if (isReady) {
-        result = await loginWebCaptureResponse(page, user, password);
-      } else {
-        result = await loginAppCaptureResponse(page, user, password);
+
+      for (const endpoint of endpoints) {
+        const loginUrl = endpoint.replace("/api", "/#/index");
+        const isReady = await isUrlReady(loginUrl);
+        if (isReady) {
+          loginPage = loginUrl;
+          break;
+        }
       }
 
+      if (!loginPage) {
+        console.error("No ready login URL found after retry.");
+        return null;
+      }
+
+      result = await loginWebCaptureResponse(page, user, password, loginPage);
       token = result.token;
       payload = result.payload;
     }
@@ -292,55 +217,9 @@ async function getH25Token(user: string, password: string) {
   } else {
     console.log("Token not found after retry.");
     console.log("Payload:", payload);
-    token = await getH25TokenRequest(payload, verify);
   }
 
   return token;
 }
 
-async function getH25TokenRequest(loginPayload: any, verify: any) {
-  const formData = new FormData();
-  Object.keys(loginPayload).forEach((key) => {
-    if (key === "verifyCode") {
-      formData.append(key, verify);
-    } else {
-      formData.append(key, loginPayload[key]);
-    }
-  });
-
-  try {
-    const response = await axios.post(
-      "https://h25gg.com/api/v/user/newLoginv2",
-      formData,
-      {
-        headers: formData.getHeaders(),
-      }
-    );
-
-    if (
-      response.data.code === 10000 &&
-      response.data.data &&
-      response.data.data.token
-    ) {
-      console.log(
-        "Extracted token from axios request:",
-        response.data.data.token
-      );
-      return response.data.data.token;
-    } else {
-      console.log(
-        "Failed to extract token with axios request. Response:",
-        response.data
-      );
-      return null;
-    }
-  } catch (error) {
-    console.error("Error occurred during axios request:", error);
-    return null;
-  }
-}
-
 export { getH25Token };
-function createWorker(arg0: WorkerOptions): Worker | PromiseLike<Worker> {
-  throw new Error("Function not implemented.");
-}
