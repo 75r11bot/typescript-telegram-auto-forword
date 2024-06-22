@@ -134,7 +134,7 @@ async function isUrlReady(url: string, retries = 3): Promise<boolean> {
   let retryCount = 0;
   while (retryCount < retries) {
     try {
-      const response = await axios.get(url, { timeout: 20000 }); // Increase timeout if necessary
+      const response = await axios.get(url, { timeout: 10000 }); // Increase timeout if necessary
       if (response.status === 200) {
         return true;
       }
