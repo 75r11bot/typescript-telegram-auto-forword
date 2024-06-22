@@ -7,6 +7,7 @@ import {
   processH25Response,
   responseResult,
 } from "./services";
+
 const botToken = siteConfig.botToken;
 const botResultChannelId = process.env.BOT_RESULT_CHANNEL_ID || "";
 const sourceChannelIds = process.env.SOURCE_CHANNEL_IDS
@@ -14,6 +15,7 @@ const sourceChannelIds = process.env.SOURCE_CHANNEL_IDS
   : [];
 let lastProcessedMessage: string | null = null; // Variable to store last processed message
 let botStarted = false;
+let bot: Telegraf<Context>;
 
 if (!botToken) {
   throw new Error("BOT_TOKEN is not set in environment variables");
@@ -21,16 +23,16 @@ if (!botToken) {
 
 // Initialize the Telegram bot
 async function initializeBot(axiosInstance: AxiosInstance) {
-  console.log("Initialize the Telegram bot");
+  console.log("Initializing the Telegram bot");
   if (botStarted) return;
   botStarted = true;
 
-  const bot = new Telegraf(botToken);
+  bot = new Telegraf(botToken);
 
   bot.start((ctx) => ctx.reply("Bot started!"));
 
   axiosInstance = await checkAxiosInstance(axiosInstance);
-  console.log("Bot on Received message");
+  console.log("Bot ready to receive messages");
 
   bot.on("message", async (ctx: any) => {
     const message = ctx.message;
@@ -42,13 +44,13 @@ async function initializeBot(axiosInstance: AxiosInstance) {
     if (message.caption !== undefined) {
       if (message.caption !== lastProcessedMessage) {
         if (
-          sourceChannelIds.includes(message.forward_origin.chat.id.toString())
+          message.forward_from_chat &&
+          sourceChannelIds.includes(message.forward_from_chat.id.toString())
         ) {
-          console.log("Bot Process Bonus Code call h25 Api ");
+          console.log("Processing bonus code via h25 API");
           await processBonusCode(axiosInstance, message.caption);
           await botSendMessageToDestinationChannel(bot);
         }
-        // await processBonusCode(axiosInstance, message.caption);
         lastProcessedMessage = message.caption;
       } else {
         console.log(
@@ -84,13 +86,13 @@ async function botSendMessageToDestinationChannel(
 
       const summaryResponse = `
         Summary:
-        Total : ${resultData.length}
-        Success : ${summaryData.success.count}
-        Failure : ${summaryData.failure.count}
-        `;
+        Total: ${resultData.length}
+        Success: ${summaryData.success.count}
+        Failure: ${summaryData.failure.count}
+      `;
 
-      // let responseMessage = `Bonus Code H25 Response User: ${username}\n${summaryResponse}\n\n${formattedResponse}`;
-      let responseMessage = `Bonus Code H25 Response User: ${username}\n${summaryResponse}\n\n`;
+      let responseMessage = `Bonus Code H25 Response User: ${username}\n${summaryResponse}\n\n${formattedResponse}`;
+
       // Validate message length against Telegram's limits (4096 characters)
       if (responseMessage.length > 4096) {
         console.warn(
@@ -113,4 +115,17 @@ async function botSendMessageToDestinationChannel(
   }
 }
 
-export { initializeBot };
+async function restartBotService() {
+  console.log("Restarting service...");
+  if (bot) {
+    try {
+      await bot.stop();
+      botStarted = false;
+      console.log("Bot stopped successfully.");
+    } catch (error) {
+      console.error("Error stopping bot:", error);
+    }
+  }
+}
+
+export { initializeBot, restartBotService };
