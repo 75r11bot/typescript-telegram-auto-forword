@@ -132,10 +132,14 @@ async function loginWebCaptureResponse(
 
 async function isUrlReady(url: string): Promise<boolean> {
   try {
-    const response = await axios.get(url, { timeout: 5000 });
+    const response = await axios.get(url, { timeout: 10000 });
     return response.status === 200;
   } catch (error) {
     console.error(`Error checking URL status: ${error}`);
+    if (axios.isAxiosError(error) && error.code === "ECONNABORTED") {
+      console.log("Timeout occurred. Retrying...");
+      return isUrlReady(url); // Retry on timeout
+    }
     return false;
   }
 }
