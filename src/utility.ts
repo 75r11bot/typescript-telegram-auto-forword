@@ -1,7 +1,7 @@
 import { Page, chromium } from "playwright";
 import dotenv from "dotenv";
 import fs from "fs";
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 import querystring from "querystring";
 import { createWorker as tesseractCreateWorker, Worker } from "tesseract.js";
 
@@ -62,7 +62,7 @@ async function loginWebCaptureResponse(
   try {
     await page.goto(url, {
       waitUntil: "load",
-      timeout: 90000,
+      timeout: 90000, // Increase timeout as necessary
     });
 
     page.on("response", async (response) => {
@@ -130,18 +130,31 @@ async function loginWebCaptureResponse(
   return { token, payload: loginPayload, verifyCode };
 }
 
-async function isUrlReady(url: string): Promise<boolean> {
-  try {
-    const response = await axios.get(url, { timeout: 10000 });
-    return response.status === 200;
-  } catch (error) {
-    console.error(`Error checking URL status: ${error}`);
-    if (axios.isAxiosError(error) && error.code === "ECONNABORTED") {
-      console.log("Timeout occurred. Retrying...");
-      return isUrlReady(url); // Retry on timeout
+async function isUrlReady(url: string, retries = 3): Promise<boolean> {
+  let retryCount = 0;
+  while (retryCount < retries) {
+    try {
+      const response = await axios.get(url, { timeout: 20000 }); // Increase timeout if necessary
+      if (response.status === 200) {
+        return true;
+      }
+    } catch (error) {
+      console.error(`Error checking URL status: ${error}`);
+      if (axios.isAxiosError(error) && error.code === "ECONNABORTED") {
+        console.log(
+          `Timeout occurred on attempt ${retryCount + 1}. Retrying...`
+        );
+        await new Promise((resolve) =>
+          setTimeout(resolve, Math.pow(2, retryCount) * 1000)
+        ); // Exponential backoff
+        retryCount++;
+        continue;
+      }
     }
-    return false;
+    retryCount++;
   }
+
+  return false;
 }
 
 async function getH25Token(
