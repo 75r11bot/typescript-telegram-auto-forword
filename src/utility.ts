@@ -48,7 +48,7 @@ async function loginAppCaptureResponse(
   user: string,
   password: string
 ): Promise<{
-  verifyCode: any;
+  verifyCode: string | null;
   token: string | null;
   payload: any | null;
 }> {
@@ -146,7 +146,7 @@ async function loginWebCaptureResponse(
   user: string,
   password: string
 ): Promise<{
-  verifyCode: any;
+  verifyCode: string | null;
   token: string | null;
   payload: any | null;
 }> {
@@ -238,13 +238,15 @@ async function isUrlReady(url: string): Promise<boolean> {
 async function getH25Token(user: string, password: string) {
   let token: string | null = null;
   let payload: any | null = null;
-  let verify: any | null = null;
+  let verify: string | null = null;
+  let context = null;
+  let browser = null;
 
   try {
-    const browser = await chromium.launch({
+    browser = await chromium.launch({
       headless: true,
     });
-    const context = await browser.newContext();
+    context = await browser.newContext();
     let page = await context.newPage();
 
     const url = webLoginUrl;
@@ -274,11 +276,15 @@ async function getH25Token(user: string, password: string) {
       token = result.token;
       payload = result.payload;
     }
-
-    await context.close();
-    await browser.close();
   } catch (error) {
     console.error("Error occurred during browser operation:", error);
+  } finally {
+    if (context) {
+      await context.close();
+    }
+    if (browser) {
+      await browser.close();
+    }
   }
 
   if (token) {
