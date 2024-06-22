@@ -62,7 +62,7 @@ async function initializeClient() {
       apiHash,
       {
         connectionRetries: 5,
-        timeout: 120000,
+        timeout: 30000, // 30 seconds
         useWSS: true,
       }
     );
