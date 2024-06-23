@@ -35,7 +35,7 @@ const destinationChannelId = process.env.DESTINATION_CHANNEL_ID || "";
 const resultChannelId = process.env.RESULT_CHANNEL_ID || "";
 const phoneNumber = process.env.APP_YOUR_PHONE || "";
 const userPassword = process.env.APP_YOUR_PWD || "";
-const port = Number(process.env.PORT) || 5001;
+const port = Number(process.env.PORT) || 5000;
 const sessionsDirectory = siteConfig.sessionsDirectory;
 const sessionFilePath = siteConfig.sessionFileName;
 const MAX_RETRIES = 5;
@@ -53,6 +53,7 @@ let sessionClient = fs.existsSync(sessionFilePath)
 let client: TelegramClient | null = null;
 let axiosInstance: AxiosInstance;
 let expressServer: any;
+let lastMessageClient: string | null = null; // Variable to store last processed message
 
 async function initializeClient() {
   if (!client) {
@@ -62,7 +63,7 @@ async function initializeClient() {
       apiHash,
       {
         connectionRetries: 5,
-        timeout: 120000,
+        timeout: 30000, // 30 seconds
         useWSS: true,
       }
     );
@@ -202,79 +203,6 @@ async function retryConnection() {
   }
 }
 
-async function handleNewMessage(event: NewMessageEvent) {
-  try {
-    const message = event.message;
-    const peer = message.peerId;
-
-    // Log the incoming message details
-    console.log(
-      `Received message: ${message.message} from peer: ${peer.className}`
-    );
-    console.log(`Message ID: ${message.id}, Peer ID: ${peer.toString()}`);
-
-    // Ensure the message is from a source channel
-    let channelIdAsString: string | null = null;
-    if (peer instanceof Api.PeerChannel) {
-      channelIdAsString = `-100${peer.channelId.toString()}`;
-    } else if (peer instanceof Api.PeerChat) {
-      channelIdAsString = `-${peer.chatId.toString()}`;
-    }
-
-    if (channelIdAsString && sourceChannelIds.includes(channelIdAsString)) {
-      console.log("Processing bonus code...");
-      await processBonusCode(axiosInstance, message.message);
-      if (!destinationChannelIds.includes(channelIdAsString)) {
-        console.log(
-          `Forwarding message from source channel ${channelIdAsString}`
-        );
-        await forwardMessage(message, destinationChannelId);
-      } else {
-        console.log(
-          `Channel ID ${channelIdAsString} is in destinationChannelIds, not forwarding.`
-        );
-      }
-
-      // Check if there are valid bonus codes to send
-      if (responseResult.result.length > 0) {
-        console.log("Sending result message...");
-        await sendResultMessage(responseResult);
-        console.log("Result message sent.");
-      } else {
-        console.log(
-          "No valid bonus codes processed, not sending result message."
-        );
-      }
-    } else {
-      console.log(
-        `Channel ID ${channelIdAsString} is not in sourceChannelIds, ignoring message.`
-      );
-    }
-  } catch (error) {
-    console.error("Error in handleNewMessage:", error);
-    handleTelegramError(error as Error);
-  }
-}
-
-async function forwardMessage(
-  message: Api.Message,
-  destinationChannelId: string
-) {
-  try {
-    const destinationPeer = await client!.getEntity(destinationChannelId);
-
-    await client!.forwardMessages(destinationPeer, {
-      messages: [message.id],
-      fromPeer: message.peerId,
-    });
-
-    console.log("Message forwarded successfully.");
-  } catch (error) {
-    console.error("Error forwarding message:", error);
-    handleTelegramError(error as Error);
-  }
-}
-
 async function sendResultMessage(responseResult: any): Promise<void> {
   try {
     if (!client) await initializeClient();
@@ -320,6 +248,25 @@ async function sendResultMessage(responseResult: any): Promise<void> {
   }
 }
 
+async function forwardMessage(
+  message: Api.Message,
+  destinationChannelId: string
+) {
+  try {
+    const destinationPeer = await client!.getEntity(destinationChannelId);
+
+    await client!.forwardMessages(destinationPeer, {
+      messages: [message.id],
+      fromPeer: message.peerId,
+    });
+
+    console.log("Message forwarded successfully.");
+  } catch (error) {
+    console.error("Error forwarding message:", error);
+    handleTelegramError(error as Error);
+  }
+}
+
 async function startClient() {
   try {
     await initializeClient();
@@ -327,9 +274,50 @@ async function startClient() {
     axiosInstance = await checkAxiosInstance(axiosInstance);
 
     if (!client) {
-      await initializeClient();
       throw new Error("Telegram client is not initialized.");
     }
+
+    console.log("Initializing message forwarding...");
+    const messageFilter = new NewMessage({
+      chats: sourceChannelIds.map((id) => parseInt(id, 10)), // Source channels
+      incoming: true, // Filter only incoming messages
+    });
+
+    client.addEventHandler(async (event: NewMessageEvent) => {
+      try {
+        const message = event.message;
+        const peer = message.peerId;
+        console.log(`Message ID: ${message.id}, Peer ID: ${peer.toString()}`);
+        console.log(`Last Message Client Form Chat : ${lastMessageClient}`);
+        console.log(`Received  New Message: ${message.message}`);
+
+        let channelIdAsString: string | null = null;
+        if (peer instanceof Api.PeerChannel) {
+          channelIdAsString = `-100${peer.channelId.toString()}`;
+        } else if (peer instanceof Api.PeerChat) {
+          channelIdAsString = `-${peer.chatId.toString()}`;
+        }
+        console.log(`Received Message Form Chat : ${channelIdAsString}`);
+
+        if (lastMessageClient !== message.message) {
+          console.log(`Call process BonusCode ...`);
+          await processBonusCode(axiosInstance, message.message);
+          if (responseResult.result.length > 0) {
+            console.log(
+              `Send Message Result process Bonus Code to Chat Result`
+            );
+            await sendResultMessage(responseResult);
+          }
+          console.log(`Forward Message Bonus Code to Chat`);
+          await forwardMessage(message, destinationChannelId);
+          lastMessageClient = message.message;
+        }
+      } catch (error) {
+        handleTelegramError(error as Error);
+      }
+    }, messageFilter);
+
+    await initializeBot(axiosInstance);
 
     const me = (await client.getEntity("me")) as Api.User;
     const displayName = [me.firstName, me.lastName].filter(Boolean).join(" ");
@@ -339,22 +327,6 @@ async function startClient() {
     dialogs.forEach((dialog) => {
       console.log(`Chat ID: ${dialog.id}, Title: ${dialog.title}`);
     });
-
-    const newMessageFilter = new NewMessage({});
-    console.log("Initializing message forwarding...");
-    await client.addEventHandler(handleNewMessage, newMessageFilter);
-    console.log("Message forwarding initialized successfully.");
-
-    const allUpdatesFilter = new NewMessage({});
-    await client.addEventHandler((update: NewMessageEvent) => {
-      console.log(
-        "Inline event handler received message:",
-        update.message.message
-      ); // Log received message update
-    }, allUpdatesFilter);
-
-    await initializeBot(axiosInstance);
-
     console.log("Telegram client initialized and fully operational.");
   } catch (error) {
     console.error("Failed to start client:", error);
@@ -397,9 +369,36 @@ async function initializeService() {
     const app = express();
 
     app.get("/health", healthCheck);
-    expressServer = app.listen(port, () => {
-      console.log(`Server is running on port ${port}`);
-    });
+
+    const startServer = (port: number): Promise<boolean> => {
+      return new Promise((resolve, reject) => {
+        expressServer = app
+          .listen(port, () => {
+            console.log(`Server is running on port ${port}`);
+            resolve(true);
+          })
+          .on("error", (err: any) => {
+            if (err.code === "EADDRINUSE") {
+              console.error(
+                `Port ${port} is already in use, trying next port...`
+              );
+              resolve(false);
+            } else {
+              reject(err);
+            }
+          });
+      });
+    };
+
+    let serverStarted = false;
+    let currentPort = port;
+
+    while (!serverStarted) {
+      serverStarted = await startServer(currentPort);
+      if (!serverStarted) {
+        currentPort++;
+      }
+    }
 
     process.on("SIGINT", () => {
       console.log("Received SIGINT. Exiting gracefully...");
@@ -423,6 +422,9 @@ async function initializeService() {
       ) {
         console.log("Critical error detected. Restarting service...");
         restartService();
+      } else if (error.message.includes("EADDRINUSE")) {
+        console.error("Address in use, restarting with a different port...");
+        initializeService();
       } else {
         console.log("Unhandled exception. Exiting...");
         process.exit(1);
