@@ -14,6 +14,7 @@ const endpoints = [
   process.env.API_ENDPOINT_4,
 ].filter(Boolean) as string[];
 
+const t6Endpoint = process.env.API_ENDPOINT_T6 || "";
 async function createTesseractWorker(): Promise<Worker> {
   try {
     const worker = await tesseractCreateWorker();
@@ -130,6 +131,69 @@ async function loginWebCaptureResponse(
   return { token, payload: loginPayload, verifyCode };
 }
 
+async function loginT6WebCaptureResponse(
+  page: Page,
+  user: string,
+  password: string,
+  url: string
+): Promise<{ session: string | null }> {
+  let session: string | null = null;
+
+  try {
+    await page.goto(url, { waitUntil: "load", timeout: 90000 });
+
+    page.on("response", async (response) => {
+      if (response.url().includes("/api/login/member")) {
+        const responseBody = await response.text();
+        const jsonResponse = JSON.parse(responseBody);
+        if (
+          jsonResponse.code === 0 &&
+          jsonResponse.data &&
+          jsonResponse.data.session
+        ) {
+          session = jsonResponse.data.session;
+        }
+      }
+    });
+
+    await page.getByLabel("Close").click();
+    await page.getByRole("button", { name: "เข้าสู่ระบบ" }).click();
+    await page
+      .getByRole("dialog")
+      .locator("div")
+      .filter({
+        hasText:
+          "ชื่อผู้ใช้ *รหัสผ่าน *เข้าสู่ระบบลืมรหัสผ่าน?ไม่มีบัญชี? ลงทะเบียนบัญชี",
+      })
+      .nth(1)
+      .click();
+    await page.getByPlaceholder("ชื่อผู้ใช้").click();
+    await page.getByPlaceholder("ชื่อผู้ใช้").fill("nus9331");
+    await page
+      .locator("div:nth-child(4) > .ant-col > .ant-form-item-control-input")
+      .click();
+    await page.getByPlaceholder("รหัสผ่าน").fill("nnnn9331");
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "เข้าสู่ระบบ" })
+      .click();
+
+    await page.waitForTimeout(5000);
+
+    const frame = page.frame({ name: "iframe" });
+    if (frame) {
+      await frame.waitForLoadState("domcontentloaded");
+      await frame.waitForTimeout(3000);
+    } else {
+      console.error("Frame not found");
+    }
+  } catch (error) {
+    console.error("Error occurred during login:", error);
+  }
+
+  return { session };
+}
+
 async function isUrlReady(url: string, retries = 3): Promise<boolean> {
   let retryCount = 0;
   while (retryCount < retries) {
@@ -239,4 +303,69 @@ async function getH25Token(
   return token;
 }
 
-export { getH25Token };
+async function getT6Session(
+  user: string,
+  password: string
+): Promise<string | null> {
+  let session: string | null = null;
+  let context = null;
+  let browser = null;
+
+  try {
+    browser = await chromium.launch({ headless: true });
+    context = await browser.newContext();
+    let page = await context.newPage();
+    const loginUrl = t6Endpoint.replace("/api", "/th-th/home");
+
+    if (!loginUrl) {
+      console.error("No ready login URL found.");
+      return null;
+    }
+
+    let result = await loginT6WebCaptureResponse(
+      page,
+      user,
+      password,
+      loginUrl
+    );
+
+    session = result.session;
+
+    if (!session) {
+      console.log("Session not found. Retrying login after 5 seconds...");
+      await page.close();
+      page = await context.newPage();
+      await page.waitForTimeout(5000);
+
+      const loginUrl = t6Endpoint.replace("/api", "/th-th/home");
+
+      if (!loginUrl) {
+        console.error("No ready login URL found.");
+        return null;
+      }
+
+      result = await loginT6WebCaptureResponse(page, user, password, loginUrl);
+
+      session = result.session;
+    }
+  } catch (error) {
+    console.error("Error occurred during browser operation:", error);
+  } finally {
+    if (context) {
+      await context.close();
+    }
+    if (browser) {
+      await browser.close();
+    }
+  }
+
+  if (session) {
+    console.log("Extracted session:", session);
+  } else {
+    console.log("Session not found after retry.");
+  }
+
+  return session;
+}
+
+export { getH25Token, getT6Session };

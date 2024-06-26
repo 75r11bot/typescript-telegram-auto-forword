@@ -15,6 +15,8 @@ const NODE_ENV = process.env.NODE_ENV || ENV_DEFAULT;
 const BASE_URL = process.env.BASE_URL || "";
 const h25User = process.env.H25_USER || "";
 const h25Password = process.env.H25_PASSWORD || "";
+const t6User = process.env.T6_USER || "";
+const t6Password = process.env.T6_PASSWORD || "";
 // Define the site configuration based on the current environment
 let siteConfig: any;
 
@@ -27,6 +29,8 @@ switch (NODE_ENV) {
       botToken: "6417397590:AAH8oGjlyhTEdxJCafrtSsPKRMJEBWbq3vI",
       h25User: h25User,
       h25Password: h25Password,
+      t6User: t6User,
+      t6Password: t6Password,
       sessionsDirectory: "./sessions/local-host",
       sessionFileName: "./sessions/local-host/local_session.txt",
     };
@@ -39,6 +43,8 @@ switch (NODE_ENV) {
       botToken: "7393640522:AAFZGg9Oj0v_BcfApffdYsdqAHU5PtkOHRw",
       h25User: h25User,
       h25Password: h25Password,
+      t6User: t6User,
+      t6Password: t6Password,
       sessionsDirectory: "./sessions/render-host",
       sessionFileName: "./sessions/render-host/render_session.txt",
     };
@@ -51,6 +57,8 @@ switch (NODE_ENV) {
       botToken: "7064883047:AAEzslnI5Qg66367WFpx0gBtt8ipA7Ev-AU",
       h25User: h25User,
       h25Password: h25Password,
+      t6User: t6User,
+      t6Password: t6Password,
       sessionsDirectory: "./sessions/docker-host",
       sessionFileName: "./sessions/docker-host/docker_session.txt",
     };
@@ -63,6 +71,8 @@ switch (NODE_ENV) {
       botToken: "",
       h25User: h25User,
       h25Password: h25Password,
+      t6User: t6User,
+      t6Password: t6Password,
       sessionsDirectory: "./sessions/default-host",
       sessionFileName: "./sessions/default-host/default_session.txt",
     };
