@@ -5,6 +5,9 @@ import { TelegramClient } from "telegram";
 import { StringSession } from "telegram/sessions";
 import { AxiosInstance } from "axios";
 import { Api } from "telegram/tl";
+import { NewMessage } from "telegram/events";
+import { NewMessageEvent } from "telegram/events/NewMessage";
+
 import {
   initializeAxiosInstance,
   initializeAxiosInstanceT6,
@@ -323,55 +326,47 @@ async function startClient() {
 
 async function addMessageHandlers() {
   try {
-    if (!client) await initializeClient();
-    // Define message filters for H25 THAILAND and T6 Thailand channels
-    const messageFilterH25 = { chat_id: -1001836737719 };
-    const messageFilterT6 = { chat_id: -1001951928932 };
+    if (!client) {
+      await initializeClient(); // Initialize your Telegram client if not already done
+    }
 
-    // Event handler for messages in H25 THAILAND channel
-    console.log("Event handler for messages in H25 THAILAND Channel.");
-    await client!.on("message", async (msg: any) => {
-      if (msg.chat.id === messageFilterH25.chat_id) {
-        console.log(`Received message in H25 THAILAND: ${msg.text}`);
-        try {
-          const message = msg.text;
-          console.log(`Processing bonus code H25 Thailand...`);
+    // Define message filters for H25 THAILAND and T6 Thailand channels
+    const messageFilterH25 = BigInt(-1001836737719);
+    const messageFilterT6 = BigInt(-1001951928932);
+
+    // Event handler for messages
+    const messageHandler = async (event: NewMessageEvent) => {
+      const message = event.message;
+      const peerId = (message.peerId as Api.PeerChannel).channelId;
+
+      try {
+        if (peerId.equals(messageFilterH25)) {
+          console.log(`Received message in H25 THAILAND: ${message.message}`);
+
           // Process bonus code for H25 THAILAND
-          await processBonusCode(axiosInstance, message);
+          await processBonusCode(axiosInstance, message.message);
 
           // If there are results, send the result message
           if (responseResult.result.length > 0) {
-            console.log(`Sending result message...`);
             await sendResultMessage(responseResult);
           }
 
-          // Update last processed message
-          lastMessageClient = message;
-
           // Forward the message to the destination channel
-          console.log(`Forwarding new message: ${message} to destination`);
-          await forwardMessage(msg, bonusH25ChannelId);
-        } catch (error) {
-          handleTelegramError(error as Error);
-        }
-      }
-    });
+          await forwardMessage(message, bonusH25ChannelId);
 
-    // Event handler for messages in T6 Thailand channel
-    console.log("Event handler for messages in T6 Thailand Channel.");
-    await client!.on("message", async (msg: any) => {
-      if (msg.chat.id === messageFilterT6.chat_id) {
-        console.log(`Received message in T6 Thailand: ${msg.text}`);
-        try {
-          const message = msg.text;
-          console.log(`Processing bonus code T6 Thailand...`);
+          // Update last processed message
+          lastMessageClient = message.message;
+        } else if (peerId.equals(messageFilterT6)) {
+          console.log(`Received message in T6 Thailand: ${message.message}`);
 
           // Process bonus code for T6 Thailand
-          const success = await processBonusCodeT6(axiosInstanceT6, message);
+          const success = await processBonusCodeT6(
+            axiosInstanceT6,
+            message.message
+          );
 
           // If processed successfully, send the result message
           if (success) {
-            console.log(`Sending result message...`);
             await sendResultMessage("Bonus code processed successfully.");
           } else {
             console.log(
@@ -380,14 +375,15 @@ async function addMessageHandlers() {
           }
 
           // Forward the message to the destination channel
-          console.log(`Forwarding new message: ${message} to destination`);
-          await forwardMessage(msg, bonusT6ChannelId);
-        } catch (error) {
-          console.error("Error in handleT6NewMessage:", error);
-          handleTelegramError(error as Error);
+          await forwardMessage(message, bonusT6ChannelId);
         }
+      } catch (error) {
+        handleTelegramError(error as Error);
       }
-    });
+    };
+
+    // Add the event handler for new messages
+    client!.addEventHandler(messageHandler, new NewMessage({}));
 
     console.log("Message handlers initialized.");
   } catch (error) {
