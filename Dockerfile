@@ -47,15 +47,15 @@ COPY sessions ./sessions
 RUN yarn run build
 
 # Expose the port the app runs on
-EXPOSE 5000
+EXPOSE 5001
 
 # # Set environment variables with default values
-ENV NODE_ENV=${NODE_ENV:-production}
-ENV BASE_URL=${BASE_URL:-https://typescript-telegram-auto-forward.onrender.com}
+# ENV NODE_ENV=${NODE_ENV:-production}
+# ENV BASE_URL=${BASE_URL:-https://typescript-telegram-auto-forward.onrender.com}
 
 
-# ENV NODE_ENV=${NODE_ENV:-develop_docker}
-# ENV BASE_URL=${BASE_URL:-http://localhost:5003}
+ENV NODE_ENV=${NODE_ENV:-develop_docker}
+ENV BASE_URL=${BASE_URL:-http://localhost:5003}
 
 # Add the healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 CMD curl -f ${BASE_URL} || exit 1

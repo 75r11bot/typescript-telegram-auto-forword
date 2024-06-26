@@ -5,6 +5,7 @@ import {
   checkAxiosInstance,
 } from "./axios/axios.config";
 import { siteConfig } from "./sites.config";
+import { resolve } from "path";
 
 // Configuring dotenv
 dotenv.config();
@@ -155,7 +156,6 @@ async function handleError(
   }
 }
 
-// Function to wait for a given time
 async function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -264,6 +264,39 @@ async function checkNetworkConnectivity(): Promise<boolean> {
   }
 }
 
+async function processBonusCodeT6(
+  axiosInstance: AxiosInstance,
+  message: string
+): Promise<boolean> {
+  const regex = /\b[A-Z0-9]{10}\b/;
+  const match = message.match(regex);
+  const containsBonusText = message.includes("กดรับโค้ด");
+  const containsBonusText1 = message.includes("แจกแลกรหัส");
+
+  if (
+    (match && match[0].length == 10 && containsBonusText) ||
+    (match && match[0].length == 10 && containsBonusText1)
+  ) {
+    const bonusCode = match[0];
+    console.log(`Extracted bonus code T6 Thailand ®: ${bonusCode}`);
+
+    // Process the bonus code by making an API call
+    try {
+      const response = await axiosInstance.get(
+        `/member/redeem/apply?code=${bonusCode}`
+      );
+      console.log("Bonus code processed:", response.data);
+      return true; // Indicate success
+    } catch (error) {
+      console.error("Error processing bonus code:", error);
+      return false; // Indicate failure
+    }
+  } else {
+    console.log("No valid bonus code found or 'กดรับโค้ด' text is missing.");
+    return false; // Indicate no valid code or missing text
+  }
+}
+
 // Exporting functions without redeclaring responseResult
 export {
   processBonusCode,
@@ -271,4 +304,5 @@ export {
   getInput,
   processH25Response,
   checkNetworkConnectivity,
+  processBonusCodeT6,
 };

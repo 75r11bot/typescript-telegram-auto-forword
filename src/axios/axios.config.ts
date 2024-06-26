@@ -1,7 +1,7 @@
 import axios, { AxiosInstance, AxiosError, AxiosResponse } from "axios";
 import axiosRetry from "axios-retry";
 import moment from "moment";
-import { getH25Token } from "../utility";
+import { getH25Token, getT6Session } from "../utility";
 import { siteConfig } from "../sites.config";
 
 const endpoints = [
@@ -11,6 +11,9 @@ const endpoints = [
   process.env.API_ENDPOINT_4,
 ].filter(Boolean) as string[];
 
+const t6Endpoint = process.env.API_ENDPOINT_T6 || "";
+
+// Initialize Axios instance for H25
 async function initializeAxiosInstance(): Promise<AxiosInstance> {
   const siteId = "1451470260579512322";
   const siteCode = "ybaxcf-4";
@@ -125,6 +128,7 @@ async function initializeAxiosInstance(): Promise<AxiosInstance> {
   throw new Error("No valid endpoint and token combination found.");
 }
 
+// Check Axios instance for H25
 async function checkAxiosInstance(
   axiosInstance: AxiosInstance
 ): Promise<AxiosInstance> {
@@ -161,4 +165,77 @@ async function checkAxiosInstance(
   }
 }
 
-export { initializeAxiosInstance, checkAxiosInstance };
+// Initialize Axios instance for T6
+async function initializeAxiosInstanceT6(): Promise<AxiosInstance> {
+  const t6Username = siteConfig.t6User || "";
+  const t6Password = siteConfig.t6Password || "";
+
+  axiosRetry(axios, {
+    retries: 3,
+    retryDelay: (retryCount) => retryCount * 1000,
+    retryCondition: (error: AxiosError): boolean => {
+      return (
+        error.code === "ECONNABORTED" ||
+        error.code === "ECONNRESET" ||
+        (error.response && error.response.status >= 500) ||
+        false
+      );
+    },
+  });
+
+  let session: string | null = null;
+  if (!session) {
+    session = await getT6Session(t6Username, t6Password);
+    if (!session) {
+      console.log("Failed to retrieve session.");
+    }
+  }
+
+  const headers = {
+    Accept: "application/json, text/plain, */*",
+    Session: session,
+    "User-Agent":
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
+  };
+
+  const axiosInstance = axios.create({
+    baseURL: t6Endpoint,
+    headers: headers,
+    timeout: 90000,
+  });
+
+  const url = `/member/info`;
+  const response: AxiosResponse<any> = await axiosInstance.get(url);
+  if (response.status === 200) {
+    return axiosInstance;
+  } else {
+    throw new Error(
+      `Endpoint ${t6Endpoint} responded with status code ${response.status}.`
+    );
+  }
+}
+
+// Check Axios instance for T6
+async function checkAxiosInstanceT6(
+  axiosInstance: AxiosInstance
+): Promise<AxiosInstance> {
+  try {
+    const url = `/member/info`;
+    const response: AxiosResponse<any> = await axiosInstance.get(url);
+    if (response.status === 200) {
+      console.log(`axiosInstance is ready to T6 .`);
+      return axiosInstance;
+    } else {
+      return initializeAxiosInstanceT6(); // Reinitialize if no endpoint is ready
+    }
+  } catch (error: any) {
+    return initializeAxiosInstanceT6(); // Reinitialize if no endpoint is ready
+  }
+}
+
+export {
+  initializeAxiosInstance,
+  checkAxiosInstance,
+  initializeAxiosInstanceT6,
+  checkAxiosInstanceT6,
+};

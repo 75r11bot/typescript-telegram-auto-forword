@@ -1,37 +1,46 @@
 import { Telegraf, Context } from "telegraf";
 import { siteConfig } from "./sites.config";
-import { checkAxiosInstance } from "./axios/axios.config";
+import {
+  initializeAxiosInstance,
+  checkAxiosInstance,
+  initializeAxiosInstanceT6,
+  checkAxiosInstanceT6,
+} from "./axios/axios.config";
 import { AxiosInstance } from "axios";
 import {
   processBonusCode,
   processH25Response,
   responseResult,
+  processBonusCodeT6,
 } from "./services";
 
 const botToken = siteConfig.botToken;
 const botResultChannelId = process.env.BOT_RESULT_CHANNEL_ID || "";
-const sourceChannelIds = process.env.SOURCE_CHANNEL_IDS
-  ? process.env.SOURCE_CHANNEL_IDS.split(",").map((id) => id.trim())
-  : [];
-let lastProcessedMessage: string | null = null; // Variable to store last processed message
+const T6ChannelId = "-1001951928932";
+const H25ChannelId = "-1001836737719";
+
+let lastProcessedMessage: string | null = null;
 let botStarted = false;
 let bot: Telegraf<Context>;
+let axiosInstance: AxiosInstance;
+let axiosInstanceT6: AxiosInstance;
 
 if (!botToken) {
   throw new Error("BOT_TOKEN is not set in environment variables");
 }
 
 // Initialize the Telegram bot
-async function initializeBot(axiosInstance: AxiosInstance) {
+async function initializeBot() {
   console.log("Initializing the Telegram bot");
   if (botStarted) return;
   botStarted = true;
 
   bot = new Telegraf(botToken);
-
+  axiosInstance = await initializeAxiosInstance();
+  axiosInstanceT6 = await initializeAxiosInstanceT6();
   bot.start((ctx) => ctx.reply("Bot started!"));
 
-  axiosInstance = await checkAxiosInstance(axiosInstance);
+  // axiosInstance = await checkAxiosInstance(axiosInstance);
   console.log("Bot ready to receive messages");
 
   bot.on("message", async (ctx: any) => {
@@ -45,11 +54,20 @@ async function initializeBot(axiosInstance: AxiosInstance) {
       if (message.caption !== lastProcessedMessage) {
         if (
           message.forward_from_chat &&
-          sourceChannelIds.includes(message.forward_from_chat.id.toString())
+          H25ChannelId == message.forward_from_chat.id.toString()
         ) {
+          axiosInstance = await checkAxiosInstance(axiosInstance);
           console.log("Processing bonus code via h25 API");
           await processBonusCode(axiosInstance, message.caption);
           await botSendMessageToDestinationChannel(bot);
+        } else if (
+          message.forward_from_chat &&
+          T6ChannelId == message.forward_from_chat.id.toString()
+        ) {
+          axiosInstanceT6 = await checkAxiosInstanceT6(axiosInstanceT6);
+
+          console.log("Processing bonus code via T6 API");
+          await processBonusCodeT6(axiosInstanceT6, message.caption);
         }
         lastProcessedMessage = message.caption;
       } else {
@@ -75,15 +93,6 @@ async function botSendMessageToDestinationChannel(
     const summaryData = processH25Response(resultData);
 
     if (resultData.length > 0) {
-      let formattedResponse = resultData
-        .map(
-          (result: { code: any; message: any; data: any }, index: number) => `
-          **Result ${index + 1}**
-          Code: \`${result.code}\`
-        `
-        )
-        .join("\n");
-
       const summaryResponse = `
         Summary:
         Total: ${resultData.length}
@@ -91,7 +100,7 @@ async function botSendMessageToDestinationChannel(
         Failure: ${summaryData.failure.count}
       `;
 
-      let responseMessage = `Bonus Code H25 Response User: ${username}\n${summaryResponse}\n\n${formattedResponse}`;
+      let responseMessage = `Bonus Code H25 Response User: ${username}\n${summaryResponse}\n\n`;
 
       // Validate message length against Telegram's limits (4096 characters)
       if (responseMessage.length > 4096) {

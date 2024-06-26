@@ -4,7 +4,7 @@ services:
   telegram-auto-forward:
     build: .
     ports:
-      - "5003:5000"
+      - "5003:5001"
     environment:
       - NODE_ENV=develop_docker
       - API_ID=${API_ID}
