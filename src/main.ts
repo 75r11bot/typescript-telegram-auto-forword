@@ -314,10 +314,9 @@ async function startClient() {
       await initializeSession();
     }
 
-    // Initialize the bot
-    await initializeBot();
     // Add message handlers
     await addMessageHandlers();
+    await initializeBot(axiosInstance, axiosInstanceT6);
   } catch (error) {
     console.error("Error starting client:", error);
     handleTelegramError(error as Error);
@@ -342,7 +341,7 @@ async function addMessageHandlers() {
       try {
         if (peerId.equals(messageFilterH25)) {
           console.log(`Received message in H25 THAILAND: ${message.message}`);
-
+          // Initialize the bot
           // Process bonus code for H25 THAILAND
           await processBonusCode(axiosInstance, message.message);
 
@@ -351,39 +350,57 @@ async function addMessageHandlers() {
             await sendResultMessage(responseResult);
           }
 
-          // Forward the message to the destination channel
-          await forwardMessage(message, bonusH25ChannelId);
-
+          if (lastMessageClient !== message.message) {
+            // Forward the message to the destination channel
+            await forwardMessage(message, bonusH25ChannelId);
+          }
           // Update last processed message
-          lastMessageClient = message.message;
         } else if (peerId.equals(messageFilterT6)) {
           console.log(`Received message in T6 Thailand: ${message.message}`);
-
+          // Initialize the bot
           // Process bonus code for T6 Thailand
           const success = await processBonusCodeT6(
             axiosInstanceT6,
             message.message
           );
+          const resultEntity = await client!.getEntity(resultChannelId);
 
           // If processed successfully, send the result message
           if (success) {
-            await sendResultMessage("Bonus code processed successfully.");
+            await client!.sendMessage(resultEntity, {
+              message: "T6 Thailand Bonus code processed successfully.",
+              parseMode: "markdown",
+            });
           } else {
             console.log(
               "Failed to process bonus code or no valid bonus code found."
             );
+            await client!.sendMessage(resultEntity, {
+              message: "T6 Thailand Bonus code processed Failed.",
+              parseMode: "markdown",
+            });
           }
-
-          // Forward the message to the destination channel
-          await forwardMessage(message, bonusT6ChannelId);
+          if (lastMessageClient !== message.message) {
+            // Forward the message to the destination channel
+            await forwardMessage(message, bonusT6ChannelId);
+          }
         }
+        lastMessageClient = message.message;
       } catch (error) {
         handleTelegramError(error as Error);
       }
     };
 
     // Add the event handler for new messages
-    client!.addEventHandler(messageHandler, new NewMessage({}));
+    const messageFilter = new NewMessage({
+      chats: [
+        -1001836737719, // H25 THAILAND 🇹🇭
+        -1001951928932, // T6 Thailand ®
+        -1001230500052, // H25 AFFILIATE🎰
+      ],
+      incoming: true,
+    });
+    client!.addEventHandler(messageHandler, messageFilter);
 
     console.log("Message handlers initialized.");
   } catch (error) {

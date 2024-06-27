@@ -1,11 +1,6 @@
 import { Telegraf, Context } from "telegraf";
 import { siteConfig } from "./sites.config";
-import {
-  initializeAxiosInstance,
-  checkAxiosInstance,
-  initializeAxiosInstanceT6,
-  checkAxiosInstanceT6,
-} from "./axios/axios.config";
+import { checkAxiosInstance, checkAxiosInstanceT6 } from "./axios/axios.config";
 import { AxiosInstance } from "axios";
 import {
   processBonusCode,
@@ -22,22 +17,23 @@ const H25ChannelId = "-1001836737719";
 let lastProcessedMessage: string | null = null;
 let botStarted = false;
 let bot: Telegraf<Context>;
-let axiosInstance: AxiosInstance;
-let axiosInstanceT6: AxiosInstance;
 
 if (!botToken) {
   throw new Error("BOT_TOKEN is not set in environment variables");
 }
 
 // Initialize the Telegram bot
-async function initializeBot() {
+async function initializeBot(
+  axiosInstance: AxiosInstance,
+  axiosInstanceT6: AxiosInstance
+) {
   console.log("Initializing the Telegram bot");
   if (botStarted) return;
   botStarted = true;
-
+  axiosInstance = await checkAxiosInstance(axiosInstance);
+  axiosInstanceT6 = await checkAxiosInstanceT6(axiosInstanceT6);
   bot = new Telegraf(botToken);
-  axiosInstance = await initializeAxiosInstance();
-  axiosInstanceT6 = await initializeAxiosInstanceT6();
+
   bot.start((ctx) => ctx.reply("Bot started!"));
 
   // axiosInstance = await checkAxiosInstance(axiosInstance);
@@ -56,7 +52,6 @@ async function initializeBot() {
           message.forward_from_chat &&
           H25ChannelId == message.forward_from_chat.id.toString()
         ) {
-          axiosInstance = await checkAxiosInstance(axiosInstance);
           console.log("Processing bonus code via h25 API");
           await processBonusCode(axiosInstance, message.caption);
           await botSendMessageToDestinationChannel(bot);
@@ -64,8 +59,6 @@ async function initializeBot() {
           message.forward_from_chat &&
           T6ChannelId == message.forward_from_chat.id.toString()
         ) {
-          axiosInstanceT6 = await checkAxiosInstanceT6(axiosInstanceT6);
-
           console.log("Processing bonus code via T6 API");
           await processBonusCodeT6(axiosInstanceT6, message.caption);
         }
