@@ -155,7 +155,7 @@ async function loginT6WebCaptureResponse(
         }
       }
     });
-
+    await page.waitForTimeout(3000);
     await page.getByLabel("Close").click();
     await page.getByRole("button", { name: "เข้าสู่ระบบ" }).click();
     await page
@@ -168,11 +168,11 @@ async function loginT6WebCaptureResponse(
       .nth(1)
       .click();
     await page.getByPlaceholder("ชื่อผู้ใช้").click();
-    await page.getByPlaceholder("ชื่อผู้ใช้").fill("nus9331");
+    await page.getByPlaceholder("ชื่อผู้ใช้").fill(user);
     await page
       .locator("div:nth-child(4) > .ant-col > .ant-form-item-control-input")
       .click();
-    await page.getByPlaceholder("รหัสผ่าน").fill("nnnn9331");
+    await page.getByPlaceholder("รหัสผ่าน").fill(password);
     await page
       .getByRole("dialog")
       .getByRole("button", { name: "เข้าสู่ระบบ" })
