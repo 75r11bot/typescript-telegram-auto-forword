@@ -27,6 +27,7 @@ declare module "telegram/sessions" {
 declare module "telegram/events" {
   export class NewMessage {
     message: any;
+    peerId: PeerChannel;
     constructor(options: any);
   }
 
