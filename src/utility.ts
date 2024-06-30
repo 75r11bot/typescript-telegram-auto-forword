@@ -15,6 +15,7 @@ const endpoints = [
 ].filter(Boolean) as string[];
 
 const t6Endpoint = process.env.API_ENDPOINT_T6 || "";
+
 async function createTesseractWorker(): Promise<Worker> {
   try {
     const worker = await tesseractCreateWorker();
@@ -62,8 +63,8 @@ async function loginWebCaptureResponse(
 
   try {
     await page.goto(url, {
-      waitUntil: "load",
-      timeout: 90000, // Increase timeout as necessary
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
     });
 
     page.on("response", async (response) => {
@@ -107,6 +108,8 @@ async function loginWebCaptureResponse(
     await page.getByPlaceholder("รหัสผ่าน").click();
     await page.getByPlaceholder("รหัสผ่าน").fill(password);
 
+    let verifyCode = ""; // Initialize verifyCode variable
+
     if (verifyCode) {
       await page.locator('input[type="text"]').nth(2).click();
       await page.locator('input[type="text"]').nth(2).fill(verifyCode);
@@ -115,14 +118,28 @@ async function loginWebCaptureResponse(
     await page
       .getByRole("button", { name: "ลงชื่อเข้าใช้", exact: true })
       .click();
-    await page.waitForTimeout(5000);
 
-    const frame = page.frame({ name: "iframe" });
+    let loginTimeout = 10000;
+    const frame = await page.frame({ name: "iframe" });
     if (frame) {
-      await frame.waitForLoadState("domcontentloaded");
-      await frame.waitForTimeout(3000);
+      await frame.waitForLoadState("domcontentloaded", {
+        timeout: loginTimeout,
+      });
     } else {
-      console.error("Frame not found");
+      console.error("H25 Frame not found");
+      loginTimeout = loginTimeout * 2;
+    }
+
+    // Wait for successful login indicator
+    const loginSuccessText = `ยินดีต้อนรับ ${user}`;
+    await page.waitForSelector(`text=${loginSuccessText}`, {
+      timeout: loginTimeout,
+    }); // Increase selector timeout
+
+    if (loginSuccessText) {
+      console.log("Successfully Login H25.");
+    } else {
+      console.error("Failed Login H25");
     }
   } catch (error) {
     console.error("Error occurred during login:", error);
@@ -136,56 +153,95 @@ async function loginT6WebCaptureResponse(
   user: string,
   password: string,
   url: string
-): Promise<{ session: string | null }> {
-  let session: string | null = null;
+) {
+  let session = null;
+  let loginTimeout = 10000;
 
   try {
-    await page.goto(url, { waitUntil: "load", timeout: 90000 });
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 100000 });
 
     page.on("response", async (response) => {
       if (response.url().includes("/api/login/member")) {
-        const responseBody = await response.text();
-        const jsonResponse = JSON.parse(responseBody);
-        if (
-          jsonResponse.code === 0 &&
-          jsonResponse.data &&
-          jsonResponse.data.session
-        ) {
-          session = jsonResponse.data.session;
+        try {
+          const responseBody = await response.text();
+          const jsonResponse = JSON.parse(responseBody);
+          if (
+            jsonResponse.code === 0 &&
+            jsonResponse.data &&
+            jsonResponse.data.session
+          ) {
+            session = jsonResponse.data.session;
+          }
+        } catch (error) {
+          console.error("Error parsing response:", error);
         }
       }
     });
-    await page.waitForTimeout(3000);
-    await page.getByLabel("Close").click();
-    await page.getByRole("button", { name: "เข้าสู่ระบบ" }).click();
-    await page
-      .getByRole("dialog")
-      .locator("div")
-      .filter({
-        hasText:
-          "ชื่อผู้ใช้ *รหัสผ่าน *เข้าสู่ระบบลืมรหัสผ่าน?ไม่มีบัญชี? ลงทะเบียนบัญชี",
-      })
-      .nth(1)
-      .click();
-    await page.getByPlaceholder("ชื่อผู้ใช้").click();
-    await page.getByPlaceholder("ชื่อผู้ใช้").fill(user);
-    await page
-      .locator("div:nth-child(4) > .ant-col > .ant-form-item-control-input")
-      .click();
-    await page.getByPlaceholder("รหัสผ่าน").fill(password);
-    await page
-      .getByRole("dialog")
-      .getByRole("button", { name: "เข้าสู่ระบบ" })
-      .click();
 
-    await page.waitForTimeout(5000);
+    // Use a more specific selector for the close button
+    const closeButton = await page.waitForSelector(
+      'button.ant-modal-close[aria-label="Close"]',
+      {
+        timeout: loginTimeout, // Increase timeout
+      }
+    );
 
-    const frame = page.frame({ name: "iframe" });
-    if (frame) {
-      await frame.waitForLoadState("domcontentloaded");
-      await frame.waitForTimeout(3000);
+    if (closeButton) {
+      console.log("Close button found, clicking it.");
+      await closeButton.click();
     } else {
-      console.error("Frame not found");
+      loginTimeout = loginTimeout * 1.5;
+      console.error("Close button not found");
+    }
+
+    // Use updated selector for the login button
+    const loginButton = await page.waitForSelector(
+      'button.ant-btn.btn.gold:has-text("เข้าสู่ระบบ")',
+      { timeout: 5000 } // Increase timeout
+    );
+
+    if (loginButton) {
+      console.log("Login button found, clicking it.");
+      await loginButton.click();
+    } else {
+      console.error("Login button not found");
+    }
+
+    await page.getByPlaceholder("ชื่อผู้ใช้").fill(user);
+    await page.getByPlaceholder("รหัสผ่าน").fill(password);
+
+    // Use updated selector for the submit button
+    const submitButton = await page.waitForSelector(
+      'button.ant-btn.ant-btn-block.btn.red:has-text("เข้าสู่ระบบ")',
+      { timeout: 5000 } // Increase timeout
+    );
+
+    if (submitButton) {
+      console.log("Submit button found, clicking it.");
+      await submitButton.click();
+    } else {
+      console.error("Submit button not found");
+    }
+
+    const frame = await page.frame({ name: "iframe" });
+    if (frame) {
+      const frameState = await frame.waitForLoadState("domcontentloaded", {
+        timeout: loginTimeout,
+      });
+      console.log(frameState);
+    } else {
+      console.error("T6 Frame not found");
+      loginTimeout = loginTimeout * 1.5;
+    }
+
+    // Wait for successful login indicator (adjust text selector as needed)
+    const loginSuccessText = await page.waitForSelector(".accountCls > .pic", {
+      timeout: loginTimeout,
+    });
+    if (loginSuccessText) {
+      console.log("Successfully Login T6.");
+    } else {
+      console.error("Failed to find login success indicator.");
     }
   } catch (error) {
     console.error("Error occurred during login:", error);
@@ -198,7 +254,7 @@ async function isUrlReady(url: string, retries = 3): Promise<boolean> {
   let retryCount = 0;
   while (retryCount < retries) {
     try {
-      const response = await axios.get(url, { timeout: 10000 }); // Increase timeout if necessary
+      const response = await axios.get(url, { timeout: 10000 });
       if (response.status === 200) {
         return true;
       }
@@ -210,7 +266,7 @@ async function isUrlReady(url: string, retries = 3): Promise<boolean> {
         );
         await new Promise((resolve) =>
           setTimeout(resolve, Math.pow(2, retryCount) * 1000)
-        ); // Exponential backoff
+        );
         retryCount++;
         continue;
       }

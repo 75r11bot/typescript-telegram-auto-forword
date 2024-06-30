@@ -22,31 +22,31 @@ async function initializeAxiosInstance(): Promise<AxiosInstance> {
   const h25Username = siteConfig.h25User || "";
   const h25Password = siteConfig.h25Password || "";
 
-  // Configure Axios retry logic
-  axiosRetry(axios, {
-    retries: 3,
-    retryDelay: (retryCount) => retryCount * 1000,
-    retryCondition: (error: AxiosError): boolean => {
-      return (
-        error.code === "ECONNABORTED" ||
-        error.code === "ECONNRESET" ||
-        (error.response ? error.response.status >= 500 : false)
-      );
-    },
-  });
+  try {
+    // Configure Axios retry logic
+    axiosRetry(axios, {
+      retries: 3,
+      retryDelay: (retryCount) => retryCount * 1000,
+      retryCondition: (error: AxiosError): boolean => {
+        return (
+          error.code === "ECONNABORTED" ||
+          error.code === "ECONNRESET" ||
+          (error.response ? error.response.status >= 500 : false)
+        );
+      },
+    });
 
-  let token: string | null = null;
+    let token: string | null = null;
 
-  for (const endpoint of endpoints) {
-    if (!token) {
-      token = await getH25Token(h25Username, h25Password);
+    for (const endpoint of endpoints) {
       if (!token) {
-        console.log("Failed to retrieve token.");
-        continue;
+        token = await getH25Token(h25Username, h25Password);
+        if (!token) {
+          console.log("Failed to retrieve token.");
+          continue;
+        }
       }
-    }
 
-    try {
       const deviceCode = process.env.DEVICE_CODE || "";
       const sourceDomain = endpoint.replace("/api", "");
       const sign = process.env.SIGN || "";
@@ -109,23 +109,13 @@ async function initializeAxiosInstance(): Promise<AxiosInstance> {
           `Endpoint ${endpoint} responded with status code ${response.status}.`
         );
       }
-    } catch (error: any) {
-      console.error(`Error connecting to ${endpoint}: ${error.message}`);
-      if (error.response && error.response.status === 401) {
-        console.log("Token might be invalid. Generating a new token.");
-        token = await getH25Token(h25Username, h25Password);
-        if (!token) {
-          console.log("Failed to retrieve a new token.");
-        }
-        continue;
-      }
-      if (!error.response || error.response.status !== 401) {
-        break;
-      }
     }
-  }
 
-  throw new Error("No valid endpoint and token combination found.");
+    throw new Error("No valid endpoint and token combination found.");
+  } catch (error: any) {
+    console.error(`Error initializing axiosInstance: ${error.message}`);
+    throw error; // Rethrow the error for further handling
+  }
 }
 
 // Check Axios instance for H25
@@ -169,48 +159,59 @@ async function initializeAxiosInstanceT6(): Promise<AxiosInstance> {
   const t6Username = siteConfig.t6User || "";
   const t6Password = siteConfig.t6Password || "";
 
-  // Configure Axios retry logic
-  axiosRetry(axios, {
-    retries: 3,
-    retryDelay: (retryCount) => retryCount * 1000,
-    retryCondition: (error: AxiosError): boolean => {
-      return (
-        error.code === "ECONNABORTED" ||
-        error.code === "ECONNRESET" ||
-        (error.response ? error.response.status >= 500 : false)
-      );
-    },
-  });
+  try {
+    // Configure Axios retry logic
+    axiosRetry(axios, {
+      retries: 3,
+      retryDelay: (retryCount) => retryCount * 1000,
+      retryCondition: (error: AxiosError): boolean => {
+        return (
+          error.code === "ECONNABORTED" ||
+          error.code === "ECONNRESET" ||
+          (error.response ? error.response.status >= 500 : false)
+        );
+      },
+    });
 
-  // Retrieve session
-  let session: string | null = await getT6Session(t6Username, t6Password);
-  if (!session) {
-    console.log("Failed to retrieve session.");
-    throw new Error("Failed to retrieve session.");
-  }
+    // Retry logic for retrieving session
+    let session: string | null = null;
+    for (let i = 0; i < 3; i++) {
+      session = await getT6Session(t6Username, t6Password);
+      if (session) break;
+      console.log(`Retrying to retrieve session (${i + 1}/3)...`);
+    }
 
-  // Create Axios instance with appropriate headers
-  const axiosInstance = axios.create({
-    baseURL: t6Endpoint,
-    headers: {
-      Accept: "application/json, text/plain, */*",
-      Session: session,
-      "User-Agent":
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
-    },
-    timeout: 90000,
-  });
+    if (!session) {
+      console.log("Failed to retrieve session.");
+      throw new Error("Failed to retrieve session.");
+    }
 
-  // Verify if the instance is ready
-  const isReady = await verifyAxiosInstanceT6(axiosInstance);
-  if (isReady) {
-    return axiosInstance;
-  } else {
-    throw new Error(`Endpoint ${t6Endpoint} is not ready.`);
+    // Create Axios instance with appropriate headers
+    const axiosInstance = axios.create({
+      baseURL: t6Endpoint,
+      headers: {
+        Accept: "application/json, text/plain, */*",
+        Session: session,
+        "User-Agent":
+          "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
+      },
+      timeout: 90000,
+    });
+
+    // Verify if the instance is ready
+    const isReady = await verifyAxiosInstanceT6(axiosInstance);
+    if (isReady) {
+      return axiosInstance;
+    } else {
+      throw new Error(`Endpoint ${t6Endpoint} is not ready.`);
+    }
+  } catch (error: any) {
+    console.error(`Error initializing axiosInstanceT6: ${error.message}`);
+    throw error; // Rethrow the error for further handling
   }
 }
 
-// Function to verify Axios instance
+// Function to verify Axios instance for T6
 async function verifyAxiosInstanceT6(
   axiosInstance: AxiosInstance
 ): Promise<boolean> {
@@ -218,17 +219,13 @@ async function verifyAxiosInstanceT6(
     const response: AxiosResponse<any> = await axiosInstance.get(
       `/member/info`
     );
-    return (
-      response.status === 200 &&
-      response.data.code === 0 &&
-      response.data.message === "ok"
-    );
+    return response.status >= 200 && response.status < 300;
   } catch (error) {
     return false;
   }
 }
 
-// Function to check Axios instance and reinitialize if necessary
+// Function to check Axios instance for T6 and reinitialize if necessary
 async function checkAxiosInstanceT6(
   axiosInstance: AxiosInstance
 ): Promise<AxiosInstance> {
