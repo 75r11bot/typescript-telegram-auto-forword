@@ -39,12 +39,17 @@ const sourceChannelIds = process.env.SOURCE_CHANNEL_IDS
 const resultChannelId = process.env.RESULT_CHANNEL_ID || "";
 const phoneNumber = process.env.APP_YOUR_PHONE || "";
 const userPassword = process.env.APP_YOUR_PWD || "";
-const port = Number(process.env.PORT) || 5001;
+const port = Number(process.env.PORT) || 5000;
 const sessionsDirectory = siteConfig.sessionsDirectory;
 const sessionFilePath = siteConfig.sessionFileName;
 const MAX_RETRIES = 5;
 const INITIAL_RETRY_INTERVAL = 6000; // 6 seconds
 let retryInterval = INITIAL_RETRY_INTERVAL;
+
+const chatT6 = siteConfig.chatT6;
+const chatH25 = siteConfig.chatH25;
+const bonusT6 = siteConfig.bonusT6;
+const bonusH25 = siteConfig.bonusH25;
 
 if (!fs.existsSync(sessionsDirectory)) {
   fs.mkdirSync(sessionsDirectory);
@@ -272,6 +277,7 @@ async function forwardMessage(
     );
   } catch (error) {
     console.error("Error forwarding message:", error);
+    handleTelegramError(error as Error); // Handle the error appropriately
   }
 }
 
@@ -292,18 +298,27 @@ async function initializeService() {
     client!.addEventHandler(
       async (event: NewMessageEvent) => {
         const message = event.message;
-        const messageText = message.message;
+        if (!message) return;
+        const messageText = message.text.toLowerCase();
+
+        // Avoid processing duplicate messages
+        if (lastMessageClient === messageText) return;
+        lastMessageClient = messageText;
         const peerId = message.peerId;
 
         if (messageText && peerId) {
+          const peerIdStr = peerId.toString();
+
           console.log(
             `Received message '${messageText}' from peer ID '${peerId}'`
           );
-          if (peerId.toString() === "-1001836737719") {
+
+          if (peerIdStr === chatH25.toString()) {
             // Adjust with correct IDs
             console.log("Received message from H25 THAILAND:", messageText);
             try {
               const result = await processBonusCode(axiosInstance, messageText);
+              await forwardMessage(message, bonusH25);
 
               if (result) {
                 await sendResultMessage(result);
@@ -311,7 +326,7 @@ async function initializeService() {
             } catch (error) {
               console.error("Error processing H25 bonus code:", error);
             }
-          } else if (peerId.toString() === "-1001951928932") {
+          } else if (peerIdStr === chatT6.toString()) {
             // Adjust with correct IDs
             console.log("Received message from T6 Thailand:", messageText);
             try {
@@ -319,6 +334,7 @@ async function initializeService() {
                 axiosInstanceT6,
                 messageText
               );
+              await forwardMessage(message, bonusT6);
 
               if (result) {
                 await sendResultMessage(result);
@@ -326,39 +342,6 @@ async function initializeService() {
             } catch (error) {
               console.error("Error processing T6 bonus code:", error);
             }
-          } else {
-            console.log("Unrecognized message:", messageText);
-          }
-        }
-      },
-      new NewMessage({
-        chats: [
-          -1001836737719, // H25 THAILAND 🇹🇭
-          -1001951928932, // T6 Thailand ®
-        ],
-        incoming: true,
-      })
-    );
-
-    client!.addEventHandler(
-      async (event: NewMessageEvent) => {
-        const message = event.message;
-        const messageText = message.message;
-        const peerId = message.peerId;
-
-        if (messageText && peerId) {
-          console.log(
-            `Received message '${messageText}' from peer ID '${peerId}'`
-          );
-          if (peerId.toString() === "-1001836737719") {
-            // Adjust with correct IDs
-            console.log("Received message from H25 THAILAND:", messageText);
-            forwardMessage(message, siteConfig.bonusH25);
-          } else if (peerId.toString() === "-1001951928932") {
-            // Adjust with correct IDs
-            console.log("Received message from T6 Thailand:", messageText);
-            forwardMessage(message, siteConfig.bonusT6);
-            // Process your logic here
           } else {
             console.log("Unrecognized message:", messageText);
           }
@@ -448,20 +431,23 @@ async function startClient() {
       const peerId = message.peerId;
 
       if (messageText && peerId) {
+        const peerIdString = peerId.toString();
         logMessage(
-          `Received message '${messageText}' from peer ID '${peerId}'`
+          `Received message '${messageText}' from peer ID '${peerIdString}'`
         );
-        if (peerId.toString() === "-1001836737719") {
+
+        if (peerIdString === chatH25.toString()) {
           logMessage("Received message from H25 THAILAND:", messageText);
           try {
             const result = await processBonusCode(axiosInstance, messageText);
             if (result) {
               await sendResultMessage(result);
             }
+            await forwardMessage(message, bonusH25);
           } catch (error) {
             logMessage("Error processing H25 bonus code:", error);
           }
-        } else if (peerId.toString() === "-1001951928932") {
+        } else if (peerIdString === chatT6.toString()) {
           logMessage("Received message from T6 Thailand:", messageText);
           try {
             const result = await processBonusCodeT6(
@@ -471,11 +457,14 @@ async function startClient() {
             if (result) {
               await sendResultMessage(result);
             }
+            await forwardMessage(message, bonusT6);
           } catch (error) {
             logMessage("Error processing T6 bonus code:", error);
           }
         } else {
           logMessage("Unrecognized message:", messageText);
+          await forwardMessage(message, bonusH25);
+          await forwardMessage(message, bonusT6);
         }
       }
     };
