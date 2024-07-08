@@ -1,17 +1,13 @@
 import axios, { AxiosInstance, AxiosResponse, AxiosError } from "axios";
 import dotenv from "dotenv";
-import {
-  initializeAxiosInstance,
-  checkAxiosInstance,
-} from "./axios/axios.config";
+import { checkAxiosInstance } from "./axios/axios.config";
 import { siteConfig } from "./sites.config";
-import { resolve } from "path";
 
 // Configuring dotenv
 dotenv.config();
 
 // Constants for retrying and rate limit
-const RETRY_INTERVAL_MS = 500; // Retry interval for specific response codes in milliseconds
+const RETRY_INTERVAL_MS = 1500; // Retry interval for specific response codes in milliseconds
 const RATE_LIMIT_INTERVAL_MS = 100; // Interval to wait if rate limit is exceeded in milliseconds
 const MAX_RETRY_COUNT = 2;
 const h25Username = siteConfig.h25User || "";
@@ -44,6 +40,11 @@ interface Summary {
     count: number;
     details: { [message: string]: number };
   };
+}
+interface ProcessResult {
+  message: string;
+  result: any;
+  username: string;
 }
 
 // Function to send request
@@ -174,7 +175,7 @@ async function sendNextRequest(
 async function processBonusCode(
   axiosInstance: AxiosInstance,
   text: string
-): Promise<void> {
+): Promise<ProcessResult> {
   const codes = parseMessage(text);
   const numericalRegex = /^\d+$/;
   const filteredCodes = codes.filter(
@@ -187,6 +188,12 @@ async function processBonusCode(
   } else {
     console.log("No valid bonus codes found:", filteredCodes);
   }
+
+  return {
+    message: text,
+    result: filteredCodes,
+    username: responseResult.username,
+  };
 }
 
 // Function to parse message
@@ -267,11 +274,14 @@ async function checkNetworkConnectivity(): Promise<boolean> {
 async function processBonusCodeT6(
   axiosInstance: AxiosInstance,
   message: string
-): Promise<boolean> {
+): Promise<ProcessResult> {
   const regex = /\b[A-Z0-9]{10}\b/;
   const match = message.match(regex);
   const containsBonusText = message.includes("กดรับโค้ด");
   const containsBonusText1 = message.includes("แจกแลกรหัส");
+
+  let resultMessage =
+    "No valid bonus code found or 'กดรับโค้ด' text is missing.";
 
   if (
     (match && match[0].length == 10 && containsBonusText) ||
@@ -286,15 +296,18 @@ async function processBonusCodeT6(
         `/member/redeem/apply?code=${bonusCode}`
       );
       console.log("Bonus code processed:", response.data);
-      return true; // Indicate success
+      resultMessage = "Bonus code processed.";
     } catch (error) {
       console.error("Error processing bonus code:", error);
-      return false; // Indicate failure
+      resultMessage = "Error processing bonus code.";
     }
-  } else {
-    console.log("No valid bonus code found or 'กดรับโค้ด' text is missing.");
-    return false; // Indicate no valid code or missing text
   }
+
+  return {
+    message: resultMessage,
+    result: match ? match[0] : null,
+    username: responseResult.username,
+  };
 }
 
 // Exporting functions without redeclaring responseResult

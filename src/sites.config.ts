@@ -17,6 +17,12 @@ const h25User = process.env.H25_USER || "";
 const h25Password = process.env.H25_PASSWORD || "";
 const t6User = process.env.T6_USER || "";
 const t6Password = process.env.T6_PASSWORD || "";
+
+const bonusT6ChannelId = process.env.BONUS_T6_CHANNEL_ID || "-4238605872";
+const bonusH25ChannelId = process.env.BONUS_H25_CHANNEL_ID || "-4266183930";
+const T6ChannelId = process.env.T6_CHANNEL_ID || "-1001951928932";
+const H25ChannelId = process.env.H25_CHANNEL_ID || "-1001836737719";
+
 // Define the site configuration based on the current environment
 let siteConfig: any;
 
@@ -33,6 +39,10 @@ switch (NODE_ENV) {
       t6Password: t6Password,
       sessionsDirectory: "./sessions/local-host",
       sessionFileName: "./sessions/local-host/local_session.txt",
+      bonusT6: bonusT6ChannelId,
+      bonusH25: bonusH25ChannelId,
+      chatT6: T6ChannelId,
+      chatH25: H25ChannelId,
     };
     break;
   case ENV_PRODUCTION:
@@ -47,6 +57,10 @@ switch (NODE_ENV) {
       t6Password: t6Password,
       sessionsDirectory: "./sessions/render-host",
       sessionFileName: "./sessions/render-host/render_session.txt",
+      bonusT6: bonusT6ChannelId,
+      bonusH25: bonusH25ChannelId,
+      chatT6: T6ChannelId,
+      chatH25: H25ChannelId,
     };
     break;
   case ENV_DEVELOP_DOCKER:
@@ -61,6 +75,10 @@ switch (NODE_ENV) {
       t6Password: t6Password,
       sessionsDirectory: "./sessions/docker-host",
       sessionFileName: "./sessions/docker-host/docker_session.txt",
+      bonusT6: bonusT6ChannelId,
+      bonusH25: bonusH25ChannelId,
+      chatT6: T6ChannelId,
+      chatH25: H25ChannelId,
     };
     break;
   default:
@@ -75,6 +93,10 @@ switch (NODE_ENV) {
       t6Password: t6Password,
       sessionsDirectory: "./sessions/default-host",
       sessionFileName: "./sessions/default-host/default_session.txt",
+      bonusT6: bonusT6ChannelId,
+      bonusH25: bonusH25ChannelId,
+      chatT6: T6ChannelId,
+      chatH25: H25ChannelId,
     };
     break;
 }

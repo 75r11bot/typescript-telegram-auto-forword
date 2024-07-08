@@ -1300,7 +1300,7 @@ telegraf@^4.16.3:
     safe-compare "^1.1.4"
     sandwich-stream "^2.0.2"
 
-telegram@^2.21.2:
+telegram@^2.22.2:
   version "2.22.2"
   resolved "https://registry.yarnpkg.com/telegram/-/telegram-2.22.2.tgz#5e252135fb9b0085fb84b049c0983908b6837473"
   integrity sha512-9payizc801Aqqu4eTGPc0huxKnIwFe0hn18mrpbgAKKiMLurX/UIQW/fjPhI5ONzockDFsaXDFqTreXBoG1u3A==

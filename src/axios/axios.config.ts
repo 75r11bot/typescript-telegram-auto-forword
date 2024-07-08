@@ -213,11 +213,7 @@ async function verifyAxiosInstanceT6(
     const response: AxiosResponse<any> = await axiosInstance.get(
       `/member/info`
     );
-    return (
-      response.status === 200 &&
-      response.data.code === 0 &&
-      response.data.message === "ok"
-    );
+    return response.status === 200 && response.data.message === "ok";
   } catch (error) {
     return false;
   }

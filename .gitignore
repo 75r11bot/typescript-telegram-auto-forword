@@ -6,6 +6,8 @@ dist/
 dist/*
 !dist/.gitkeep
 
+screenshots/
+
 # Ignore .gitignore files within dist directory and its subdirectories
 dist/**/*.gitignore
 
