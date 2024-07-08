@@ -17,8 +17,20 @@ const endpoints = [
 ].filter(Boolean) as string[];
 
 const t6Endpoint = process.env.API_ENDPOINT_T6 || "";
-let imagesDirectoryT6 = "./images/t6";
-let imagesDirectoryH25 = "./images/h25";
+const imagesDirectoryT6 = "./images/t6";
+const imagesDirectoryH25 = "./images/h25";
+
+try {
+  if (!fs.existsSync(imagesDirectoryT6)) {
+    fs.mkdirSync(imagesDirectoryT6, { recursive: true });
+  }
+  if (!fs.existsSync(imagesDirectoryH25)) {
+    fs.mkdirSync(imagesDirectoryH25, { recursive: true });
+  }
+} catch (error: any) {
+  console.error(`Error creating directories: ${error.message}`);
+  process.exit(1);
+}
 
 async function createTesseractWorker(): Promise<Worker> {
   try {
@@ -343,9 +355,6 @@ async function getH25Token(
   let verify: string | null = null;
   let context = null;
   let browser = null;
-  if (!fs.existsSync(imagesDirectoryH25)) {
-    fs.mkdirSync(imagesDirectoryH25);
-  }
 
   try {
     browser = await chromium.launch({
@@ -426,9 +435,7 @@ async function getT6Session(
   let session: string | null = null;
   let context = null;
   let browser = null;
-  if (!fs.existsSync(imagesDirectoryT6)) {
-    fs.mkdirSync(imagesDirectoryT6);
-  }
+
   try {
     browser = await chromium.launch({ headless: true });
     context = await browser.newContext();
