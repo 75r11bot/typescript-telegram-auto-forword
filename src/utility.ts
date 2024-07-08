@@ -17,8 +17,15 @@ const endpoints = [
 ].filter(Boolean) as string[];
 
 const t6Endpoint = process.env.API_ENDPOINT_T6 || "";
-let imagesDirectoryT6 = "./images/t6";
-let imagesDirectoryH25 = "./images/h25";
+const imagesDirectoryT6 = "./images/t6";
+const imagesDirectoryH25 = "./images/h25";
+
+if (!fs.existsSync(imagesDirectoryT6)) {
+  fs.mkdirSync(imagesDirectoryT6);
+}
+if (!fs.existsSync(imagesDirectoryH25)) {
+  fs.mkdirSync(imagesDirectoryH25);
+}
 
 async function createTesseractWorker(): Promise<Worker> {
   try {
