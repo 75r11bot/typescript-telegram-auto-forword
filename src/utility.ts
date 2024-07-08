@@ -62,7 +62,7 @@ async function loginWebCaptureResponse(
   let token: string | null = null;
   let verifyCode: string | null = null;
   let loginPayload: any | null = null;
-  let loginTimeout: number = 20000; // Increased timeout
+  let loginTimeout: number = 15000; // Increased timeout
 
   try {
     await page.goto(url, {
@@ -128,6 +128,7 @@ async function loginWebCaptureResponse(
       `text=${loginSuccessText}`,
       {
         timeout: loginTimeout,
+        state: "visible",
       }
     ); // Increased selector timeout
 
@@ -154,7 +155,7 @@ async function loginT6WebCaptureResponse(
   url: string
 ) {
   let session: string | null = null;
-  let loginTimeout: number = 20000; // Increased timeout
+  let loginTimeout: number = 15000;
 
   try {
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 100000 });
@@ -164,11 +165,7 @@ async function loginT6WebCaptureResponse(
         try {
           const responseBody = await response.text();
           const jsonResponse = JSON.parse(responseBody);
-          if (
-            jsonResponse.code === 0 &&
-            jsonResponse.data &&
-            jsonResponse.data.session
-          ) {
+          if (jsonResponse.data && jsonResponse.data.session) {
             session = jsonResponse.data.session;
           }
         } catch (error) {
@@ -177,47 +174,64 @@ async function loginT6WebCaptureResponse(
       }
     });
 
-    console.log("Waiting for Close button");
+    // Check if modal is present and handle the close button
+    let modalClosed = false;
     try {
-      let closeButton = null;
-      if (
-        await page.waitForSelector(
-          'button.ant-modal-close[aria-label="Close"]',
-          { timeout: 25000 }
-        )
-      ) {
-        closeButton = await page.waitForSelector(
-          'button.ant-modal-close[aria-label="Close"]',
-          {
-            timeout: 25000, // Increased timeout
-          }
-        );
-      }
+      const modal = await page.waitForSelector(".ant-modal.imageModalCls", {
+        timeout: 25000,
+        state: "visible",
+      });
 
-      if (closeButton) {
-        console.log("Element Close modal button is ready, clicking it.");
-        await closeButton.click();
-      } else {
-        console.error("Element Close modal button not found");
+      if (modal) {
+        console.log("Modal found, waiting for Close button");
+        const closeButton = await page.getByLabel("Close");
+
+        if (closeButton) {
+          console.log("Element Close modal button is ready, clicking it.");
+          await closeButton.click();
+          modalClosed = true;
+        } else {
+          console.error("Element Close modal button not found");
+        }
       }
     } catch (error) {
-      console.error("Error waiting for Close button:", error);
-
-      // Capture screenshot for debugging
-      let screenshotPath = path.resolve(
-        `./screenshots/t6/close_button_error.png`
+      console.error(
+        "Modal not found or error waiting for Close button:",
+        error
       );
-      await page.screenshot({ path: screenshotPath });
-      console.log(`Screenshot captured: ${screenshotPath}`);
+    }
+
+    // Retry if the modal wasn't closed successfully
+    if (!modalClosed) {
+      try {
+        await page.waitForTimeout(5000); // Wait a bit before retrying
+        const closeButton = await page.getByLabel("Close");
+
+        if (closeButton) {
+          console.log(
+            "Retrying: Element Close modal button is ready, clicking it."
+          );
+          await closeButton.click();
+        } else {
+          console.error("Retrying: Element Close modal button not found");
+        }
+      } catch (retryError) {
+        console.error(
+          "Retry failed: Modal not found or error waiting for Close button:",
+          retryError
+        );
+
+        // Capture screenshot for debugging
+        const screenshotPath = path.resolve(
+          `./screenshots/t6/close_button_retry_error.png`
+        );
+        await page.screenshot({ path: screenshotPath });
+        console.log(`Screenshot captured: ${screenshotPath}`);
+      }
     }
 
     console.log("Waiting for Login button");
-    const loginButton = await page.waitForSelector(
-      'button.ant-btn.btn.gold:has-text("เข้าสู่ระบบ")',
-      {
-        timeout: 10000, // Increased timeout
-      }
-    );
+    const loginButton = await page.getByRole("button", { name: "เข้าสู่ระบบ" });
 
     if (loginButton) {
       console.log("Element Login modal button is ready, clicking it.");
@@ -226,34 +240,70 @@ async function loginT6WebCaptureResponse(
       console.error("Element Login modal button not found");
     }
 
-    await page.getByPlaceholder("ชื่อผู้ใช้").fill(user);
-    await page.getByPlaceholder("รหัสผ่าน").fill(password);
+    // Check if login dialog is displayed
+    try {
+      const loginDialog =
+        (await page
+          .getByRole("dialog")
+          .locator("div")
+          .filter({
+            hasText:
+              "ชื่อผู้ใช้ *รหัสผ่าน *เข้าสู่ระบบลืมรหัสผ่าน?ไม่มีบัญชี? ลงทะเบียนบัญชี",
+          })
+          .nth(1)) ||
+        (await page.waitForSelector(".ant-modal.YellowGreenLoginModalCls", {
+          state: "visible",
+          timeout: 10000,
+        }));
 
-    console.log("Waiting for Submit button");
-    const submitButton = await page.waitForSelector(
-      'button.ant-btn.ant-btn-block.btn.red:has-text("เข้าสู่ระบบ")',
-      {
-        timeout: 10000, // Increased timeout
+      if (loginDialog) {
+        await page.getByPlaceholder("ชื่อผู้ใช้").fill(user);
+        await page.getByPlaceholder("รหัสผ่าน").fill(password);
+
+        console.log("Waiting for Submit button");
+        const submitButton = await page
+          .getByRole("dialog")
+          .getByRole("button", { name: "เข้าสู่ระบบ" });
+
+        if (submitButton) {
+          console.log("Element Submit Login button is ready, clicking it.");
+          await submitButton.click();
+        } else {
+          console.error("Element Submit Login button not found");
+        }
+
+        console.log("Waiting for login success indicator");
+        const loginSuccessT6 =
+          (await page.waitForSelector(".accountCls > .pic", {
+            timeout: loginTimeout,
+            state: "visible",
+          })) || (await page.locator(".accountCls"));
+
+        if (loginSuccessT6) {
+          console.log("Successfully logged in to T6.");
+        } else {
+          console.error("Failed to find login success indicator.");
+        }
+      } else {
+        console.error("Login dialog not found");
       }
-    );
+    } catch (error) {
+      console.error("Error waiting for login dialog:", error);
 
-    if (submitButton) {
-      console.log("Element Submit Login button is ready, clicking it.");
-      await submitButton.click();
-    } else {
-      console.error("Element Submit Login button not found");
-    }
-
-    const loginSuccessT6 = await page.waitForSelector(".accountCls > .pic", {
-      timeout: loginTimeout,
-    });
-    if (loginSuccessT6) {
-      console.log("Successfully Login T6.");
-    } else {
-      console.error("Failed to find login success indicator.");
+      // Capture screenshot for debugging
+      const screenshotPath = path.resolve(
+        `./screenshots/t6/login_dialog_error.png`
+      );
+      await page.screenshot({ path: screenshotPath });
+      console.log(`Screenshot captured: ${screenshotPath}`);
     }
   } catch (error) {
     console.error("Error occurred during login:", error);
+
+    // Capture screenshot for debugging
+    const screenshotPath = path.resolve(`./screenshots/t6/login_error.png`);
+    await page.screenshot({ path: screenshotPath });
+    console.log(`Screenshot captured: ${screenshotPath}`);
   }
 
   return { session };
