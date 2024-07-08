@@ -8,7 +8,7 @@ dist/*
 
 
 
-screenshots/
+images/
 # Ignore .gitignore files within dist directory and its subdirectories
 dist/**/*.gitignore
 

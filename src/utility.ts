@@ -17,6 +17,8 @@ const endpoints = [
 ].filter(Boolean) as string[];
 
 const t6Endpoint = process.env.API_ENDPOINT_T6 || "";
+let imagesDirectoryT6 = "./images/t6";
+let imagesDirectoryH25 = "./images/h25";
 
 async function createTesseractWorker(): Promise<Worker> {
   try {
@@ -75,7 +77,8 @@ async function loginWebCaptureResponse(
         const buffer = await response.body();
         console.log("Response from verify code API: received binary data");
 
-        const imagePath = "./captcha.png";
+        const imagePath = path.resolve(`${imagesDirectoryH25}/captcha.png`);
+
         fs.writeFileSync(imagePath, buffer);
 
         verifyCode = await extractTextFromImage(imagePath);
@@ -140,7 +143,7 @@ async function loginWebCaptureResponse(
   } catch (error) {
     console.error("Error occurred during login:", error);
     // Capture screenshot for debugging
-    let screenshotPath = path.resolve(`./screenshots/h25/login_error.png`);
+    let screenshotPath = path.resolve(`${imagesDirectoryH25}/login_error.png`);
     await page.screenshot({ path: screenshotPath });
     console.log(`Screenshot captured: ${screenshotPath}`);
   }
@@ -223,7 +226,7 @@ async function loginT6WebCaptureResponse(
 
         // Capture screenshot for debugging
         const screenshotPath = path.resolve(
-          `./screenshots/t6/close_button_retry_error.png`
+          `${imagesDirectoryT6}/close_button_retry_error.png`
         );
         await page.screenshot({ path: screenshotPath });
         console.log(`Screenshot captured: ${screenshotPath}`);
@@ -292,18 +295,13 @@ async function loginT6WebCaptureResponse(
 
       // Capture screenshot for debugging
       const screenshotPath = path.resolve(
-        `./screenshots/t6/login_dialog_error.png`
+        `${imagesDirectoryT6}/login_dialog_error.png`
       );
       await page.screenshot({ path: screenshotPath });
       console.log(`Screenshot captured: ${screenshotPath}`);
     }
   } catch (error) {
     console.error("Error occurred during login:", error);
-
-    // Capture screenshot for debugging
-    const screenshotPath = path.resolve(`./screenshots/t6/login_error.png`);
-    await page.screenshot({ path: screenshotPath });
-    console.log(`Screenshot captured: ${screenshotPath}`);
   }
 
   return { session };
@@ -345,6 +343,9 @@ async function getH25Token(
   let verify: string | null = null;
   let context = null;
   let browser = null;
+  if (!fs.existsSync(imagesDirectoryH25)) {
+    fs.mkdirSync(imagesDirectoryH25);
+  }
 
   try {
     browser = await chromium.launch({
@@ -425,7 +426,9 @@ async function getT6Session(
   let session: string | null = null;
   let context = null;
   let browser = null;
-
+  if (!fs.existsSync(imagesDirectoryT6)) {
+    fs.mkdirSync(imagesDirectoryT6);
+  }
   try {
     browser = await chromium.launch({ headless: true });
     context = await browser.newContext();
