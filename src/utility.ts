@@ -178,7 +178,7 @@ async function loginT6WebCaptureResponse(
     let modalClosed = false;
     try {
       const modal = await page.waitForSelector(".ant-modal.imageModalCls", {
-        timeout: 25000,
+        timeout: 30000,
         state: "visible",
       });
 
