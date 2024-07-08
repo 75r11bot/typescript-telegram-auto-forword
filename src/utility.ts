@@ -321,6 +321,7 @@ async function loginT6WebCaptureResponse(
 
 async function isUrlReady(url: string, retries = 3): Promise<boolean> {
   let retryCount = 0;
+  console.log("loginUrl:", url);
   while (retryCount < retries) {
     try {
       const response = await axios.get(url, { timeout: 10000 });
@@ -367,6 +368,7 @@ async function getH25Token(
     for (const endpoint of endpoints) {
       const loginUrl = endpoint.replace("/api", "/#/index");
       const isReady = await isUrlReady(loginUrl);
+
       if (isReady) {
         loginPage = loginUrl;
         break;

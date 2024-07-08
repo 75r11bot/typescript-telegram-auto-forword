@@ -310,8 +310,13 @@ async function initializeService() {
           const peerIdStr = peerId.toString();
 
           console.log(
-            `Received message '${messageText}' from peer ID '${peerId}'`
+            `Received message '${messageText}' from peer ID '${peerIdStr}'`
           );
+
+          // Log peerIdStr, chatH25, and chatT6 for debugging
+          console.log(`peerIdStr: ${peerIdStr}`);
+          console.log(`chatH25: ${chatH25}`);
+          console.log(`chatT6: ${chatT6}`);
 
           if (peerIdStr === chatH25.toString()) {
             // Adjust with correct IDs
@@ -431,40 +436,38 @@ async function startClient() {
       const peerId = message.peerId;
 
       if (messageText && peerId) {
-        const peerIdString = peerId.toString();
+        const peerIdStr = peerId.toString();
+
         logMessage(
-          `Received message '${messageText}' from peer ID '${peerIdString}'`
+          `Received message '${messageText}' from peer ID '${peerIdStr}'`
         );
 
-        if (peerIdString === chatH25.toString()) {
+        // Log peerIdStr, chatH25, and chatT6 for debugging
+        logMessage(`peerIdStr: ${peerIdStr}`);
+        logMessage(`chatH25: ${chatH25}`);
+        logMessage(`chatT6: ${chatT6}`);
+
+        if (peerIdStr === chatH25.toString()) {
+          // Adjust with correct IDs
           logMessage("Received message from H25 THAILAND:", messageText);
           try {
-            const result = await processBonusCode(axiosInstance, messageText);
-            if (result) {
-              await sendResultMessage(result);
-            }
+            logMessage("Forword message to Bonus Code H25:", bonusH25);
             await forwardMessage(message, bonusH25);
           } catch (error) {
             logMessage("Error processing H25 bonus code:", error);
           }
-        } else if (peerIdString === chatT6.toString()) {
+        } else if (peerIdStr === chatT6.toString()) {
+          // Adjust with correct IDs
           logMessage("Received message from T6 Thailand:", messageText);
           try {
-            const result = await processBonusCodeT6(
-              axiosInstanceT6,
-              messageText
-            );
-            if (result) {
-              await sendResultMessage(result);
-            }
+            logMessage("Forword message to Bonus Code T6:", bonusT6);
             await forwardMessage(message, bonusT6);
           } catch (error) {
             logMessage("Error processing T6 bonus code:", error);
           }
         } else {
           logMessage("Unrecognized message:", messageText);
-          await forwardMessage(message, bonusH25);
-          await forwardMessage(message, bonusT6);
+          logMessage("log message peerId:", message.peerId);
         }
       }
     };
