@@ -1,6 +1,8 @@
 import { Page, chromium } from "playwright";
 import dotenv from "dotenv";
 import fs from "fs";
+import path from "path";
+
 import axios, { AxiosError } from "axios";
 import querystring from "querystring";
 import { createWorker as tesseractCreateWorker, Worker } from "tesseract.js";
@@ -60,6 +62,7 @@ async function loginWebCaptureResponse(
   let token: string | null = null;
   let verifyCode: string | null = null;
   let loginPayload: any | null = null;
+  let loginTimeout: number = 20000; // Increased timeout
 
   try {
     await page.goto(url, {
@@ -119,30 +122,26 @@ async function loginWebCaptureResponse(
       .getByRole("button", { name: "ลงชื่อเข้าใช้", exact: true })
       .click();
 
-    let loginTimeout = 10000;
-    const frame = await page.frame({ name: "iframe" });
-    if (frame) {
-      await frame.waitForLoadState("domcontentloaded", {
-        timeout: loginTimeout,
-      });
-    } else {
-      console.error("H25 Frame not found");
-      loginTimeout = loginTimeout * 2;
-    }
-
     // Wait for successful login indicator
     const loginSuccessText = `ยินดีต้อนรับ ${user}`;
-    await page.waitForSelector(`text=${loginSuccessText}`, {
-      timeout: loginTimeout,
-    }); // Increase selector timeout
+    const loginSuccessH25 = await page.waitForSelector(
+      `text=${loginSuccessText}`,
+      {
+        timeout: loginTimeout,
+      }
+    ); // Increased selector timeout
 
-    if (loginSuccessText) {
+    if (loginSuccessH25) {
       console.log("Successfully Login H25.");
     } else {
       console.error("Failed Login H25");
     }
   } catch (error) {
     console.error("Error occurred during login:", error);
+    // Capture screenshot for debugging
+    let screenshotPath = path.resolve(`./screenshots/h25/login_error.png`);
+    await page.screenshot({ path: screenshotPath });
+    console.log(`Screenshot captured: ${screenshotPath}`);
   }
 
   return { token, payload: loginPayload, verifyCode };
@@ -154,8 +153,8 @@ async function loginT6WebCaptureResponse(
   password: string,
   url: string
 ) {
-  let session = null;
-  let loginTimeout = 10000;
+  let session: string | null = null;
+  let loginTimeout: number = 20000; // Increased timeout
 
   try {
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 100000 });
@@ -178,67 +177,77 @@ async function loginT6WebCaptureResponse(
       }
     });
 
-    // Use a more specific selector for the close button
-    const closeButton = await page.waitForSelector(
-      'button.ant-modal-close[aria-label="Close"]',
+    console.log("Waiting for Close button");
+    try {
+      let closeButton = null;
+      if (
+        await page.waitForSelector(
+          'button.ant-modal-close[aria-label="Close"]',
+          { timeout: 25000 }
+        )
+      ) {
+        closeButton = await page.waitForSelector(
+          'button.ant-modal-close[aria-label="Close"]',
+          {
+            timeout: 25000, // Increased timeout
+          }
+        );
+      }
+
+      if (closeButton) {
+        console.log("Element Close modal button is ready, clicking it.");
+        await closeButton.click();
+      } else {
+        console.error("Element Close modal button not found");
+      }
+    } catch (error) {
+      console.error("Error waiting for Close button:", error);
+
+      // Capture screenshot for debugging
+      let screenshotPath = path.resolve(
+        `./screenshots/t6/close_button_error.png`
+      );
+      await page.screenshot({ path: screenshotPath });
+      console.log(`Screenshot captured: ${screenshotPath}`);
+    }
+
+    console.log("Waiting for Login button");
+    const loginButton = await page.waitForSelector(
+      'button.ant-btn.btn.gold:has-text("เข้าสู่ระบบ")',
       {
-        timeout: loginTimeout, // Increase timeout
+        timeout: 10000, // Increased timeout
       }
     );
 
-    if (closeButton) {
-      console.log("Close button found, clicking it.");
-      await closeButton.click();
-    } else {
-      loginTimeout = loginTimeout * 1.5;
-      console.error("Close button not found");
-    }
-
-    // Use updated selector for the login button
-    const loginButton = await page.waitForSelector(
-      'button.ant-btn.btn.gold:has-text("เข้าสู่ระบบ")',
-      { timeout: 5000 } // Increase timeout
-    );
-
     if (loginButton) {
-      console.log("Login button found, clicking it.");
+      console.log("Element Login modal button is ready, clicking it.");
       await loginButton.click();
     } else {
-      console.error("Login button not found");
+      console.error("Element Login modal button not found");
     }
 
     await page.getByPlaceholder("ชื่อผู้ใช้").fill(user);
     await page.getByPlaceholder("รหัสผ่าน").fill(password);
 
-    // Use updated selector for the submit button
+    console.log("Waiting for Submit button");
     const submitButton = await page.waitForSelector(
       'button.ant-btn.ant-btn-block.btn.red:has-text("เข้าสู่ระบบ")',
-      { timeout: 5000 } // Increase timeout
+      {
+        timeout: 10000, // Increased timeout
+      }
     );
 
     if (submitButton) {
-      console.log("Submit button found, clicking it.");
+      console.log("Element Submit Login button is ready, clicking it.");
       await submitButton.click();
     } else {
-      console.error("Submit button not found");
+      console.error("Element Submit Login button not found");
     }
 
-    const frame = await page.frame({ name: "iframe" });
-    if (frame) {
-      const frameState = await frame.waitForLoadState("domcontentloaded", {
-        timeout: loginTimeout,
-      });
-      console.log(frameState);
-    } else {
-      console.error("T6 Frame not found");
-      loginTimeout = loginTimeout * 1.5;
-    }
-
-    // Wait for successful login indicator (adjust text selector as needed)
-    const loginSuccessText = await page.waitForSelector(".accountCls > .pic", {
+    const loginSuccessT6 = await page.waitForSelector(".accountCls > .pic", {
       timeout: loginTimeout,
     });
-    if (loginSuccessText) {
+    if (loginSuccessT6) {
       console.log("Successfully Login T6.");
     } else {
       console.error("Failed to find login success indicator.");
