@@ -16,7 +16,6 @@ import {
 } from "./axios/axios.config";
 import {
   processBonusCode,
-  responseResult,
   getInput,
   processH25Response,
   checkNetworkConnectivity,
@@ -307,7 +306,13 @@ async function initializeService() {
         const peerId = message.peerId;
 
         if (messageText && peerId) {
-          const peerIdStr = peerId.toString();
+          let peerIdStr;
+
+          if (peerId instanceof Api.PeerChannel) {
+            peerIdStr = "-100" + peerId.channelId.valueOf().toString(); // Use valueOf to get the numeric value
+          } else {
+            peerIdStr = peerId.toString();
+          }
 
           console.log(
             `Received message '${messageText}' from peer ID '${peerIdStr}'`
@@ -322,30 +327,29 @@ async function initializeService() {
             // Adjust with correct IDs
             console.log("Received message from H25 THAILAND:", messageText);
             try {
-              const result = await processBonusCode(axiosInstance, messageText);
               await forwardMessage(message, bonusH25);
-
+            } catch (error) {
+              console.error("Error processing H25 bonus code:", error);
+              const result = await processBonusCode(axiosInstance, messageText);
               if (result) {
                 await sendResultMessage(result);
               }
-            } catch (error) {
-              console.error("Error processing H25 bonus code:", error);
             }
           } else if (peerIdStr === chatT6.toString()) {
             // Adjust with correct IDs
             console.log("Received message from T6 Thailand:", messageText);
             try {
+              await forwardMessage(message, bonusT6);
+            } catch (error) {
+              console.error("Error processing T6 bonus code:", error);
               const result = await processBonusCodeT6(
                 axiosInstanceT6,
                 messageText
               );
-              await forwardMessage(message, bonusT6);
 
               if (result) {
                 await sendResultMessage(result);
               }
-            } catch (error) {
-              console.error("Error processing T6 bonus code:", error);
             }
           } else {
             console.log("Unrecognized message:", messageText);
@@ -436,7 +440,13 @@ async function startClient() {
       const peerId = message.peerId;
 
       if (messageText && peerId) {
-        const peerIdStr = peerId.toString();
+        let peerIdStr;
+
+        if (peerId instanceof Api.PeerChannel) {
+          peerIdStr = "-100" + peerId.channelId.valueOf().toString();
+        } else {
+          peerIdStr = peerId.toString();
+        }
 
         logMessage(
           `Received message '${messageText}' from peer ID '${peerIdStr}'`
@@ -448,22 +458,31 @@ async function startClient() {
         logMessage(`chatT6: ${chatT6}`);
 
         if (peerIdStr === chatH25.toString()) {
-          // Adjust with correct IDs
           logMessage("Received message from H25 THAILAND:", messageText);
           try {
-            logMessage("Forword message to Bonus Code H25:", bonusH25);
+            logMessage("Forward message to Bonus Code H25:", bonusH25);
             await forwardMessage(message, bonusH25);
+            const result = await processBonusCode(axiosInstance, messageText);
+            if (result) {
+              await sendResultMessage(result);
+            }
           } catch (error) {
-            logMessage("Error processing H25 bonus code:", error);
+            logMessage("Error processing Forward H25 bonus code:", error);
           }
         } else if (peerIdStr === chatT6.toString()) {
-          // Adjust with correct IDs
           logMessage("Received message from T6 Thailand:", messageText);
           try {
-            logMessage("Forword message to Bonus Code T6:", bonusT6);
+            logMessage("Forward message to Bonus Code T6:", bonusT6);
             await forwardMessage(message, bonusT6);
+            const result = await processBonusCodeT6(
+              axiosInstanceT6,
+              messageText
+            );
+            if (result) {
+              await sendResultMessage(result);
+            }
           } catch (error) {
-            logMessage("Error processing T6 bonus code:", error);
+            logMessage("Error processing Forward T6 bonus code:", error);
           }
         } else {
           logMessage("Unrecognized message:", messageText);
@@ -472,6 +491,7 @@ async function startClient() {
       }
     };
 
+    // Add the event handler to the client
     client!.addEventHandler(
       handleNewMessageEvent,
       new NewMessage({
