@@ -7,7 +7,7 @@ import { siteConfig } from "./sites.config";
 dotenv.config();
 
 // Constants for retrying and rate limit
-const RETRY_INTERVAL_MS = 1500; // Retry interval for specific response codes in milliseconds
+const RETRY_INTERVAL_MS = 1200; // Retry interval for specific response codes in milliseconds
 const RATE_LIMIT_INTERVAL_MS = 100; // Interval to wait if rate limit is exceeded in milliseconds
 const MAX_RETRY_COUNT = 2;
 const h25Username = siteConfig.h25User || "";
@@ -176,6 +176,8 @@ async function processBonusCode(
   axiosInstance: AxiosInstance,
   text: string
 ): Promise<ProcessResult> {
+  responseResult.result = [];
+
   const codes = parseMessage(text);
   const numericalRegex = /^\d+$/;
   const filteredCodes = codes.filter(
@@ -190,8 +192,8 @@ async function processBonusCode(
   }
 
   return {
-    message: text,
-    result: filteredCodes,
+    message: "Bonus Codes Result",
+    result: responseResult.result,
     username: responseResult.username,
   };
 }
