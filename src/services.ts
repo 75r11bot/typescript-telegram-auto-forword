@@ -7,7 +7,7 @@ import { siteConfig } from "./sites.config";
 dotenv.config();
 
 // Constants for retrying and rate limit
-const RETRY_INTERVAL_MS = 1200; // Retry interval for specific response codes in milliseconds
+const RETRY_INTERVAL_MS = 1000; // Retry interval for specific response codes in milliseconds
 const RATE_LIMIT_INTERVAL_MS = 100; // Interval to wait if rate limit is exceeded in milliseconds
 const MAX_RETRY_COUNT = 2;
 const h25Username = siteConfig.h25User || "";
@@ -67,8 +67,7 @@ async function sendRequest(
 
     const response: AxiosResponse = await axiosInstance.post(
       `/cash/v/pay/generatePayCardV2`,
-      formData,
-      { timeout: 10000 } // Set timeout to 10 seconds
+      formData
     );
     const responseData = response.data;
 
@@ -177,6 +176,7 @@ async function processBonusCode(
   text: string
 ): Promise<ProcessResult> {
   responseResult.result = [];
+
   const codes = parseMessage(text);
   const numericalRegex = /^\d+$/;
   const filteredCodes = codes.filter(
@@ -311,6 +311,95 @@ async function processBonusCodeT6(
   };
 }
 
+async function getLotteryNum(axiosInstance: AxiosInstance) {
+  try {
+    const response = await axiosInstance.get(
+      `/activity/roulette/getLotteryNum`
+    );
+    if (response.data.canLotteryNum > 0) {
+      ///process Lottery
+    }
+  } catch (error) {
+    console.error("Error processing bonus code:", error);
+  }
+}
+
+async function calculateRealTimeRebate(axiosInstance: AxiosInstance) {
+  try {
+    const calculateUrl = `/v/realTimeRebate/calculateRealTimeRebate`;
+    const calculateParams = {
+      siteId: siteConfig.siteId,
+      siteCode: siteConfig.siteCode,
+      platformType: siteConfig.platformType,
+    };
+
+    const calculateResponse: AxiosResponse = await axiosInstance.get(
+      calculateUrl,
+      {
+        params: calculateParams,
+        timeout: 10000, // 10 seconds timeout
+      }
+    );
+
+    if (calculateResponse.data.code === 10000) {
+      const getUrl = `/v/realTimeRebate/get`;
+      const getParams = {
+        siteId: siteConfig.siteId,
+        siteCode: siteConfig.siteCode,
+        platformType: siteConfig.platformType,
+      };
+
+      const getResponse: AxiosResponse = await axiosInstance.get(getUrl, {
+        params: getParams,
+        timeout: 10000, // 10 seconds timeout
+      });
+
+      if (
+        getResponse.data.code === 10000 &&
+        Number(getResponse.data.data.remainAmount) > 200
+      ) {
+        const updateUrl = `/v/realTimeRebate/updateAmount`;
+        const dataPayload = new FormData();
+        dataPayload.append("platformType", siteConfig.platformType);
+        dataPayload.append("siteId", siteConfig.siteId);
+        dataPayload.append("siteCode", siteConfig.siteCode);
+        dataPayload.append(
+          "amount",
+          getResponse.data.data.remainAmount.toString()
+        );
+
+        const updateResponse: AxiosResponse = await axiosInstance.post(
+          updateUrl,
+          dataPayload,
+          {
+            timeout: 10000, // 10 seconds timeout
+          }
+        );
+
+        if (updateResponse.data.code === 10000) {
+          console.log("Rebate updated successfully:", updateResponse.data);
+        } else if (updateResponse.data.code === 10140) {
+          console.log("Token expired. Setting up new axiosInstance...");
+          axiosInstance = await checkAxiosInstance(axiosInstance);
+          await calculateRealTimeRebate(axiosInstance);
+        } else {
+          console.error("Failed to update rebate:", updateResponse.data);
+        }
+      } else {
+        console.log("No rebate amount available to update.");
+      }
+    } else {
+      console.log("Failed to calculate rebate:", calculateResponse.data);
+      if (calculateResponse.data.code === 10140) {
+        console.log("Token expired. Setting up new axiosInstance...");
+        axiosInstance = await checkAxiosInstance(axiosInstance);
+        await calculateRealTimeRebate(axiosInstance);
+      }
+    }
+  } catch (error) {
+    console.error("Error processing rebate calculation:", error);
+  }
+}
 // Exporting functions without redeclaring responseResult
 export {
   processBonusCode,
@@ -319,4 +408,6 @@ export {
   processH25Response,
   checkNetworkConnectivity,
   processBonusCodeT6,
+  getLotteryNum,
+  calculateRealTimeRebate,
 };

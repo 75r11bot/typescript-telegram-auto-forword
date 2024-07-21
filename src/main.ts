@@ -20,6 +20,8 @@ import {
   processH25Response,
   checkNetworkConnectivity,
   processBonusCodeT6,
+  getLotteryNum,
+  calculateRealTimeRebate,
 } from "./services";
 import { siteConfig } from "./sites.config";
 import { initializeBot, restartBotService } from "./bot";
@@ -293,6 +295,12 @@ async function initializeService() {
     res.sendStatus(200);
   });
 
+  if (client) {
+    await getChatsList(client);
+  } else {
+    await initializeClient();
+  }
+
   const addEventHandlers = async () => {
     client!.addEventHandler(
       async (event: NewMessageEvent) => {
@@ -302,7 +310,6 @@ async function initializeService() {
 
         // Avoid processing duplicate messages
         if (lastMessageClient === messageText) return;
-        lastMessageClient = messageText;
         const peerId = message.peerId;
 
         if (messageText && peerId) {
@@ -327,21 +334,18 @@ async function initializeService() {
             // Adjust with correct IDs
             console.log("Received message from H25 THAILAND:", messageText);
             try {
-              await forwardMessage(message, bonusH25);
-            } catch (error) {
-              console.error("Error processing H25 bonus code:", error);
               const result = await processBonusCode(axiosInstance, messageText);
               if (result) {
                 await sendResultMessage(result);
               }
+            } catch (error) {
+              console.error("Error processing H25 bonus code:", error);
             }
+            await forwardMessage(message, bonusH25);
           } else if (peerIdStr === chatT6.toString()) {
             // Adjust with correct IDs
             console.log("Received message from T6 Thailand:", messageText);
             try {
-              await forwardMessage(message, bonusT6);
-            } catch (error) {
-              console.error("Error processing T6 bonus code:", error);
               const result = await processBonusCodeT6(
                 axiosInstanceT6,
                 messageText
@@ -350,10 +354,14 @@ async function initializeService() {
               if (result) {
                 await sendResultMessage(result);
               }
+            } catch (error) {
+              console.error("Error processing T6 bonus code:", error);
             }
+            await forwardMessage(message, bonusT6);
           } else {
             console.log("Unrecognized message:", messageText);
           }
+          lastMessageClient = messageText;
         }
       },
       new NewMessage({
@@ -373,8 +381,7 @@ async function initializeService() {
       addEventHandlers();
     } else {
       console.log("Client is not connected. Attempting to reconnect...");
-      await initializeSession();
-
+      await restartService();
       console.log("Client is Check reconnected :", client && client.connected);
 
       if (client && client.connected) {
@@ -424,6 +431,10 @@ async function startClient() {
       console.log("Axios instance for T6 is not healthy. Reinitializing...");
       axiosInstanceT6 = await initializeAxiosInstanceT6();
     }
+
+    if (!client) await initializeClient();
+    console.log("Client is ready and waiting for new messages...");
+
     await initializeService();
     console.log("Client Connect ...:", client!.connected);
 
@@ -441,7 +452,6 @@ async function startClient() {
 
       if (messageText && peerId) {
         let peerIdStr;
-
         if (peerId instanceof Api.PeerChannel) {
           peerIdStr = "-100" + peerId.channelId.valueOf().toString();
         } else {
@@ -459,9 +469,9 @@ async function startClient() {
 
         if (peerIdStr === chatH25.toString()) {
           logMessage("Received message from H25 THAILAND:", messageText);
+          await forwardMessage(message, bonusH25);
           try {
-            logMessage("Forward message to Bonus Code H25:", bonusH25);
-            await forwardMessage(message, bonusH25);
+            logMessage("processBonusCode message to Bonus Code H25:", bonusH25);
             const result = await processBonusCode(axiosInstance, messageText);
             if (result) {
               await sendResultMessage(result);
@@ -471,9 +481,9 @@ async function startClient() {
           }
         } else if (peerIdStr === chatT6.toString()) {
           logMessage("Received message from T6 Thailand:", messageText);
+          await forwardMessage(message, bonusT6);
           try {
-            logMessage("Forward message to Bonus Code T6:", bonusT6);
-            await forwardMessage(message, bonusT6);
+            logMessage("processBonusCode message to Bonus Code T6:", bonusT6);
             const result = await processBonusCodeT6(
               axiosInstanceT6,
               messageText
@@ -492,17 +502,17 @@ async function startClient() {
     };
 
     // Add the event handler to the client
-    client!.addEventHandler(
-      handleNewMessageEvent,
-      new NewMessage({
-        chats: [
-          -1001836737719, // H25 THAILAND 🇹🇭
-          -1001951928932, // T6 Thailand ®
-        ],
-        incoming: true,
-      })
-    );
-
+    // client!.addEventHandler(
+    //   handleNewMessageEvent,
+    //   new NewMessage({
+    //     chats: [
+    //       -1001836737719, // H25 THAILAND 🇹🇭
+    //       -1001951928932, // T6 Thailand ®
+    //     ],
+    //     incoming: true,
+    //   })
+    // );
+    client!.addEventHandler(handleNewMessageEvent, new NewMessage({}));
     await initializeBot(axiosInstance, axiosInstanceT6);
   } catch (error) {
     console.error("Error during service initialization:", error);
@@ -510,24 +520,34 @@ async function startClient() {
   }
 }
 
+async function getChatsList(client: any) {
+  try {
+    const dialogs = await client.getDialogs();
+    dialogs.forEach((dialog: any) => {
+      console.log(`Chat ID: ${dialog.id}, Title: ${dialog.title}`);
+    });
+  } catch (error) {
+    console.error("Client get ChatsList Error:", error);
+    handleTelegramError(error as Error);
+  }
+}
+
 (async () => {
   await startClient();
+
   const checkConnectivity = async () => {
     try {
       await checkNetworkConnectivity();
       console.log("Network connectivity is good.");
+      if (!client) await initializeClient();
+      // await getLotteryNum(axiosInstance);
+      // await calculateRealTimeRebate(axiosInstance);
     } catch (error) {
       console.error("Network connectivity issue:", error);
       handleTelegramError(error as Error);
     }
   };
   setInterval(checkConnectivity, 200000); // Check every 2 minutes
-
-  // Fetch and log dialogs
-  const dialogs = await client!.getDialogs();
-  dialogs.forEach((dialog) => {
-    console.log(`Chat ID: ${dialog.id}, Title: ${dialog.title}`);
-  });
 
   // Fetch and log user details
   const me = (await client!.getEntity("me")) as Api.User;
