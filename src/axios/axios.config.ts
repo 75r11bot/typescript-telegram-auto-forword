@@ -177,25 +177,31 @@ async function initializeAxiosInstanceT6(): Promise<AxiosInstance> {
     let session: string | null = await getT6Session(t6Username, t6Password);
     if (!session) {
       console.log("Failed to retrieve session.");
-      throw new Error("Failed to retrieve session.");
+      //throw new Error("Failed to retrieve session.");
+      session = await getT6Session(t6Username, t6Password);
+      if (!session) {
+        console.log("Failed to retrieve session.");
+        throw new Error("Failed to retrieve session.");
+      }
     }
 
     // Create Axios instance with appropriate headers
-    const axiosInstance = axios.create({
+    const axiosInstanceT6 = axios.create({
       baseURL: t6Endpoint,
       headers: {
         Accept: "application/json, text/plain, */*",
         Session: session,
+        Dnt: 1,
         "User-Agent":
-          "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
       },
       timeout: 90000,
     });
 
     // Verify if the instance is ready
-    const isReady = await verifyAxiosInstanceT6(axiosInstance);
+    const isReady = await verifyAxiosInstanceT6(axiosInstanceT6);
     if (isReady) {
-      return axiosInstance;
+      return axiosInstanceT6;
     } else {
       throw new Error(`Endpoint ${t6Endpoint} is not ready.`);
     }
@@ -210,10 +216,8 @@ async function verifyAxiosInstanceT6(
   axiosInstance: AxiosInstance
 ): Promise<boolean> {
   try {
-    const response: AxiosResponse<any> = await axiosInstance.get(
-      `/member/info`
-    );
-    return response.status === 200 && response.data.message === "ok";
+    const response: AxiosResponse<any> = await axiosInstance.get(`member/live`);
+    return response.status === 200;
   } catch (error) {
     return false;
   }

@@ -22,17 +22,18 @@ const bonusT6ChannelId = process.env.BONUS_T6_CHANNEL_ID || "-4238605872";
 const bonusH25ChannelId = process.env.BONUS_H25_CHANNEL_ID || "-4266183930";
 const T6ChannelId = process.env.T6_CHANNEL_ID || "-1001951928932";
 const H25ChannelId = process.env.H25_CHANNEL_ID || "-1001836737719";
-
+const siteId = 1451470260579512322;
+const siteCode = "ybaxcf-4";
+const platformType = 2;
 // Define the site configuration based on the current environment
 let siteConfig: any;
 
 switch (NODE_ENV) {
   case ENV_DEVELOPMENT:
     siteConfig = {
-      siteCode: "tlf-001",
       siteName: "local-host",
       baseURL: BASE_URL,
-      botToken: "6417397590:AAH8oGjlyhTEdxJCafrtSsPKRMJEBWbq3vI",
+      botToken: "6417397590:AAE7IoO4QeiPLWOZXGR8_Z8TdVfZU2bKb3E",
       h25User: h25User,
       h25Password: h25Password,
       t6User: t6User,
@@ -43,14 +44,16 @@ switch (NODE_ENV) {
       bonusH25: bonusH25ChannelId,
       chatT6: T6ChannelId,
       chatH25: H25ChannelId,
+      siteCode: siteCode,
+      siteId: siteId,
+      platformType: platformType,
     };
     break;
   case ENV_PRODUCTION:
     siteConfig = {
-      siteCode: "tlf-002",
       siteName: "render-host",
       baseURL: BASE_URL,
-      botToken: "7393640522:AAFZGg9Oj0v_BcfApffdYsdqAHU5PtkOHRw",
+      botToken: "7393640522:AAHOsuZebF33nso9AX71nB02wUyAeMnOBkM",
       h25User: h25User,
       h25Password: h25Password,
       t6User: t6User,
@@ -61,14 +64,16 @@ switch (NODE_ENV) {
       bonusH25: bonusH25ChannelId,
       chatT6: T6ChannelId,
       chatH25: H25ChannelId,
+      siteCode: siteCode,
+      siteId: siteId,
+      platformType: platformType,
     };
     break;
   case ENV_DEVELOP_DOCKER:
     siteConfig = {
-      siteCode: "tlf-003",
       siteName: "docker-host",
       baseURL: BASE_URL,
-      botToken: "7064883047:AAEzslnI5Qg66367WFpx0gBtt8ipA7Ev-AU",
+      botToken: "7064883047:AAHQqcByGbSpdY19LQCc99i4ITU_1nK12wM",
       h25User: h25User,
       h25Password: h25Password,
       t6User: t6User,
@@ -79,11 +84,13 @@ switch (NODE_ENV) {
       bonusH25: bonusH25ChannelId,
       chatT6: T6ChannelId,
       chatH25: H25ChannelId,
+      siteCode: siteCode,
+      siteId: siteId,
+      platformType: platformType,
     };
     break;
   default:
     siteConfig = {
-      siteCode: "tlf-000",
       siteName: "default-host",
       baseURL: BASE_URL,
       botToken: "",
@@ -97,6 +104,9 @@ switch (NODE_ENV) {
       bonusH25: bonusH25ChannelId,
       chatT6: T6ChannelId,
       chatH25: H25ChannelId,
+      siteCode: siteCode,
+      siteId: siteId,
+      platformType: platformType,
     };
     break;
 }
