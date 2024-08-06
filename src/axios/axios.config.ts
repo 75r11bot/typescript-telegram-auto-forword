@@ -9,11 +9,10 @@ const endpoints = [
   process.env.API_ENDPOINT_1,
   process.env.API_ENDPOINT_2,
   process.env.API_ENDPOINT_3,
-  process.env.API_ENDPOINT_4,
 ].filter(Boolean) as string[];
 
 const t6Endpoint = process.env.API_ENDPOINT_T6 || "";
-
+const timestamp = moment(new Date()).format("YYYY-MM-DD HH:mm:ss").toString();
 // Initialize Axios instance for H25
 async function initializeAxiosInstance(): Promise<AxiosInstance> {
   const siteId = "1451470260579512322";
@@ -71,11 +70,12 @@ async function initializeAxiosInstance(): Promise<AxiosInstance> {
         "Sec-Fetch-Dest": "empty",
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Site": "same-origin",
+        dnt: 1,
         Token: token,
         Sign: sign,
-        Timestamp: moment().toISOString(),
+        Timestamp: timestamp,
         "User-Agent":
-          "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
+          "Mozilla/5.0 (Linux; Android 7.0; SM-G950U Build/NRD90M) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.84 Mobile Safari/537.36",
       };
 
       const axiosInstance = axios.create({
