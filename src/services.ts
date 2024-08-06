@@ -7,7 +7,7 @@ import { siteConfig } from "./sites.config";
 dotenv.config();
 
 // Constants for retrying and rate limit
-const RETRY_INTERVAL_MS = 1000; // Retry interval for specific response codes in milliseconds
+const RETRY_INTERVAL_MS = 500; // Retry interval for specific response codes in milliseconds
 const RATE_LIMIT_INTERVAL_MS = 100; // Interval to wait if rate limit is exceeded in milliseconds
 const MAX_RETRY_COUNT = 2;
 const h25Username = siteConfig.h25User || "";

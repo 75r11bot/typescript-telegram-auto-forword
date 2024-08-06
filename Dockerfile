@@ -47,7 +47,7 @@ COPY sessions ./sessions
 RUN yarn run build
 
 # Expose the port the app runs on
-EXPOSE 5001
+EXPOSE 5100
 
 # # Set environment variables with default values
 # ENV NODE_ENV=${NODE_ENV:-production}

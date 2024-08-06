@@ -13,7 +13,6 @@ const endpoints = [
   process.env.API_ENDPOINT_1,
   process.env.API_ENDPOINT_2,
   process.env.API_ENDPOINT_3,
-  process.env.API_ENDPOINT_4,
 ].filter(Boolean) as string[];
 
 const t6Endpoint = process.env.API_ENDPOINT_T6 || "";

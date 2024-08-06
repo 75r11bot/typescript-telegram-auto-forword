@@ -40,7 +40,7 @@ const sourceChannelIds = process.env.SOURCE_CHANNEL_IDS
 const resultChannelId = process.env.RESULT_CHANNEL_ID || "";
 const phoneNumber = process.env.APP_YOUR_PHONE || "";
 const userPassword = process.env.APP_YOUR_PWD || "";
-const port = Number(process.env.PORT) || 5001;
+const port = Number(process.env.PORT) || 5100;
 const sessionsDirectory = siteConfig.sessionsDirectory;
 const sessionFilePath = siteConfig.sessionFileName;
 const MAX_RETRIES = 5;
@@ -66,6 +66,7 @@ let axiosInstanceT6: AxiosInstance;
 
 let expressServer: any;
 let lastMessageClient: string | null = null; // Variable to store last processed message
+let lastMessageClientForword: string | null = null; // Variable to store last processed message
 
 async function initializeClient() {
   if (!client) {
@@ -186,13 +187,17 @@ async function handleTelegramError(error: Error) {
     error.message.includes("Not connected")
   ) {
     console.warn("Connection issue, retrying...");
-    retryConnection(startClient, retryInterval);
-  } else if (error.message.includes("Conflict")) {
+    retryInterval = Math.min(retryInterval * 2, 60000); // Exponential backoff, max 60 seconds
+    await retryConnection(startClient, retryInterval);
+  } else if (
+    error.message.includes("Conflict") ||
+    error.message.includes("EADDRINUSE")
+  ) {
     console.warn("Conflict detected, restarting service...");
     await restartService();
   } else if (error.message.includes("AUTH_KEY_DUPLICATED")) {
     console.log("AUTH_KEY_DUPLICATED error detected. Regenerating session...");
-    regenerateSession();
+    await regenerateSession();
   } else {
     console.error("Unhandled error, restarting client...");
     setTimeout(startClient, retryInterval);
@@ -265,6 +270,7 @@ async function forwardMessage(
   destinationChannelId: string
 ) {
   try {
+    if (!client) await initializeClient();
     // Get the entity (channel) to which the message will be forwarded
     const destinationPeer = await client!.getEntity(destinationChannelId);
     // Forward the message using Telegram client's forwardMessages method
@@ -274,7 +280,10 @@ async function forwardMessage(
     });
 
     console.log(
-      `Message forwarded from ${message.peerId} to ${destinationChannelId}`
+      `Message forwarded from Server is running on port: ${port} Successfully `
+    );
+    console.log(
+      `Message forwarded from ${message.peerId} to ${destinationChannelId} Successfully `
     );
   } catch (error) {
     console.error("Error forwarding message:", error);
@@ -284,9 +293,6 @@ async function forwardMessage(
 
 async function initializeService() {
   await initializeSession();
-  // Initialize Axios instances
-  axiosInstance = await checkAxiosInstance(axiosInstance);
-  axiosInstanceT6 = await checkAxiosInstanceT6(axiosInstanceT6);
 
   const app = express();
   app.use(express.json());
@@ -298,11 +304,11 @@ async function initializeService() {
   if (client) {
     await getChatsList(client);
   } else {
-    await initializeClient();
+    await initializeSession();
   }
 
-  const addEventHandlers = async () => {
-    client!.addEventHandler(
+  const addEventHandlers = async (client: TelegramClient) => {
+    client.addEventHandler(
       async (event: NewMessageEvent) => {
         const message = event.message;
         if (!message) return;
@@ -341,7 +347,7 @@ async function initializeService() {
             } catch (error) {
               console.error("Error processing H25 bonus code:", error);
             }
-            await forwardMessage(message, bonusH25);
+            // await forwardMessage(message, bonusH25);
           } else if (peerIdStr === chatT6.toString()) {
             // Adjust with correct IDs
             console.log("Received message from T6 Thailand:", messageText);
@@ -357,7 +363,7 @@ async function initializeService() {
             } catch (error) {
               console.error("Error processing T6 bonus code:", error);
             }
-            await forwardMessage(message, bonusT6);
+            // await forwardMessage(message, bonusT6);
           } else {
             console.log("Unrecognized message:", messageText);
           }
@@ -378,26 +384,49 @@ async function initializeService() {
     console.log("Client is Check connect:", client && client.connected);
     if (client && client.connected) {
       console.log("Client is connected :", client.connected);
-      addEventHandlers();
+      await addEventHandlers(client);
     } else {
       console.log("Client is not connected. Attempting to reconnect...");
-      await restartService();
+      await initializeClient();
       console.log("Client is Check reconnected :", client && client.connected);
 
       if (client && client.connected) {
         console.log("Client reconnected successfully :", client.connected);
-        addEventHandlers();
+        await addEventHandlers(client);
       } else {
         console.log("Failed to reconnect client");
+        await restartService();
       }
     }
   };
 
   await ensureConnectedAndAddHandlers();
 
-  expressServer = app.listen(port, () => {
-    console.log(`Server is running on port ${port}`);
-  });
+  let currentPort = port;
+
+  const startServer = (port: number) => {
+    return new Promise<void>((resolve, reject) => {
+      expressServer = app
+        .listen(port, () => {
+          console.log(`Server is running on port ${port}`);
+          resolve();
+        })
+        .on("error", (err: any) => {
+          if (err.code === "EADDRINUSE") {
+            console.warn(`Port ${port} is in use, trying another port...`);
+            resolve(startServer(port + 1));
+          } else {
+            reject(err);
+          }
+        });
+    });
+  };
+
+  try {
+    await startServer(currentPort);
+  } catch (err) {
+    console.error("Failed to start server:", err);
+  }
 
   const gracefulShutdown = () => {
     console.log("Shutting down gracefully...");
@@ -433,86 +462,74 @@ async function startClient() {
     }
 
     if (!client) await initializeClient();
-    console.log("Client is ready and waiting for new messages...");
-
-    await initializeService();
     console.log("Client Connect ...:", client!.connected);
 
-    const logMessage = (message: string, ...additionalInfo: any[]) => {
-      console.log(
-        `[${new Date().toISOString()}] ${message}`,
-        ...additionalInfo
-      );
-    };
+    await initializeService();
 
-    const handleNewMessageEvent = async (event: NewMessageEvent) => {
-      const message = event.message;
-      const messageText = message.message;
-      const peerId = message.peerId;
+    // const logMessage = (message: string, ...additionalInfo: any[]) => {
+    //   console.log(
+    //     `[${new Date().toISOString()}] ${message}`,
+    //     ...additionalInfo
+    //   );
+    // };
 
-      if (messageText && peerId) {
-        let peerIdStr;
-        if (peerId instanceof Api.PeerChannel) {
-          peerIdStr = "-100" + peerId.channelId.valueOf().toString();
-        } else {
-          peerIdStr = peerId.toString();
-        }
+    // const handleNewMessageEvent = async (event: NewMessageEvent) => {
+    //   const message = event.message;
+    //   const messageText = message.message;
+    //   const peerId = message.peerId;
 
-        logMessage(
-          `Received message '${messageText}' from peer ID '${peerIdStr}'`
-        );
+    //   if (messageText && peerId) {
+    //     let peerIdStr;
+    //     if (peerId instanceof Api.PeerChannel) {
+    //       peerIdStr = "-100" + peerId.channelId.valueOf().toString();
+    //     } else {
+    //       peerIdStr = peerId.toString();
+    //     }
 
-        // Log peerIdStr, chatH25, and chatT6 for debugging
-        logMessage(`peerIdStr: ${peerIdStr}`);
-        logMessage(`chatH25: ${chatH25}`);
-        logMessage(`chatT6: ${chatT6}`);
+    //     logMessage(
+    //       `Received message '${messageText}' from peer ID '${peerIdStr}'`
+    //     );
 
-        if (peerIdStr === chatH25.toString()) {
-          logMessage("Received message from H25 THAILAND:", messageText);
-          await forwardMessage(message, bonusH25);
-          try {
-            logMessage("processBonusCode message to Bonus Code H25:", bonusH25);
-            const result = await processBonusCode(axiosInstance, messageText);
-            if (result) {
-              await sendResultMessage(result);
-            }
-          } catch (error) {
-            logMessage("Error processing Forward H25 bonus code:", error);
-          }
-        } else if (peerIdStr === chatT6.toString()) {
-          logMessage("Received message from T6 Thailand:", messageText);
-          await forwardMessage(message, bonusT6);
-          try {
-            logMessage("processBonusCode message to Bonus Code T6:", bonusT6);
-            const result = await processBonusCodeT6(
-              axiosInstanceT6,
-              messageText
-            );
-            if (result) {
-              await sendResultMessage(result);
-            }
-          } catch (error) {
-            logMessage("Error processing Forward T6 bonus code:", error);
-          }
-        } else {
-          logMessage("Unrecognized message:", messageText);
-          logMessage("log message peerId:", message.peerId);
-        }
-      }
-    };
+    //     // Log peerIdStr, chatH25, and chatT6 for debugging
+    //     logMessage(`peerIdStr: ${peerIdStr}`);
+    //     logMessage(`chatH25: ${chatH25}`);
+    //     logMessage(`chatT6: ${chatT6}`);
 
-    // Add the event handler to the client
-    // client!.addEventHandler(
-    //   handleNewMessageEvent,
-    //   new NewMessage({
-    //     chats: [
-    //       -1001836737719, // H25 THAILAND 🇹🇭
-    //       -1001951928932, // T6 Thailand ®
-    //     ],
-    //     incoming: true,
-    //   })
-    // );
-    client!.addEventHandler(handleNewMessageEvent, new NewMessage({}));
+    //     if (peerIdStr === chatH25.toString()) {
+    //       logMessage("Received message from H25 THAILAND:", messageText);
+    //       await forwardMessage(message, bonusH25);
+    //       try {
+    //         logMessage("processBonusCode message to Bonus Code H25:", bonusH25);
+    //         const result = await processBonusCode(axiosInstance, messageText);
+    //         if (result) {
+    //           await sendResultMessage(result);
+    //         }
+    //       } catch (error) {
+    //         logMessage("Error processing Forward H25 bonus code:", error);
+    //       }
+    //     } else if (peerIdStr === chatT6.toString()) {
+    //       logMessage("Received message from T6 Thailand:", messageText);
+    //       await forwardMessage(message, bonusT6);
+    //       try {
+    //         logMessage("processBonusCode message to Bonus Code T6:", bonusT6);
+    //         const result = await processBonusCodeT6(
+    //           axiosInstanceT6,
+    //           messageText
+    //         );
+    //         if (result) {
+    //           await sendResultMessage(result);
+    //         }
+    //       } catch (error) {
+    //         logMessage("Error processing Forward T6 bonus code:", error);
+    //       }
+    //     } else {
+    //       logMessage("Unrecognized message:", messageText);
+    //       logMessage("log message peerId:", message.peerId);
+    //     }
+    //   }
+    // };
+    // client!.addEventHandler(handleNewMessageEvent, new NewMessage({}));
+
     await initializeBot(axiosInstance, axiosInstanceT6);
   } catch (error) {
     console.error("Error during service initialization:", error);
@@ -520,7 +537,61 @@ async function startClient() {
   }
 }
 
-async function getChatsList(client: any) {
+async function messageEventProcress(client: TelegramClient) {
+  console.log("Client is messageEventProcress");
+  const forwardMessageEvent = async (event: NewMessageEvent) => {
+    console.log("Client is message Forword Procress");
+
+    const message = event.message;
+    const messageText = message.message;
+    const peerId = message.peerId;
+
+    if (messageText && peerId) {
+      let peerIdStr;
+      if (lastMessageClientForword === messageText) return;
+      if (peerId instanceof Api.PeerChannel) {
+        peerIdStr = "-100" + peerId.channelId.valueOf().toString();
+      } else {
+        peerIdStr = peerId.toString();
+      }
+
+      console.log(
+        `Received message '${messageText}' from peer ID Channel :'${peerIdStr}'`
+      );
+
+      // Log peerIdStr, chatH25, and chatT6 for debugging
+      console.log(`peerIdStr: ${peerIdStr}`);
+      console.log(`chatH25: ${chatH25}`);
+      console.log(`chatT6: ${chatT6}`);
+
+      if (peerIdStr === chatH25.toString()) {
+        console.log("Forword message from H25 THAILAND:", messageText);
+        await forwardMessage(message, bonusH25);
+      } else if (peerIdStr === chatT6.toString()) {
+        console.log("Forword message from T6 Thailand:", messageText);
+        await forwardMessage(message, bonusT6);
+      } else {
+        console.log("Unrecognized message:", messageText);
+        console.log("log message peerId:", message.peerId);
+      }
+      lastMessageClientForword = messageText;
+    }
+  };
+  // client.addEventHandler(forwardMessageEvent, new NewMessage({}));
+  // Add the event handler to the client
+  client.addEventHandler(
+    forwardMessageEvent,
+    new NewMessage({
+      chats: [
+        -1001836737719, // H25 THAILAND 🇹🇭
+        -1001951928932, // T6 Thailand ®
+      ],
+      incoming: true,
+    })
+  );
+}
+
+async function getChatsList(client: TelegramClient) {
   try {
     const dialogs = await client.getDialogs();
     dialogs.forEach((dialog: any) => {
@@ -539,9 +610,21 @@ async function getChatsList(client: any) {
     try {
       await checkNetworkConnectivity();
       console.log("Network connectivity is good.");
-      if (!client) await initializeClient();
-      // await getLotteryNum(axiosInstance);
-      // await calculateRealTimeRebate(axiosInstance);
+      console.log("Client connected atatus :", client!.connected);
+      if (client && client.connected) {
+        console.log("Client is still connected");
+        await messageEventProcress(client);
+      } else {
+        console.warn("Client is disconnected, attempting to reconnect...");
+        await initializeSession();
+        if (client && client.connected) {
+          console.log("Client reconnected successfully :", client.connected);
+          await messageEventProcress(client);
+        } else {
+          console.log("Failed to reconnect client");
+          await restartService();
+        }
+      }
     } catch (error) {
       console.error("Network connectivity issue:", error);
       handleTelegramError(error as Error);

@@ -40,6 +40,7 @@ async function initializeBot(
   console.log("Bot ready to receive messages");
 
   bot.on("message", async (ctx: any) => {
+    let chatMessage;
     const message = ctx.message;
     if (!message) {
       console.log("Invalid message received:", message);
@@ -47,22 +48,29 @@ async function initializeBot(
     }
 
     if (message.caption !== undefined) {
-      if (message.caption !== lastProcessedMessage) {
+      chatMessage = message.caption;
+    } else {
+      chatMessage = message.text;
+    }
+
+    console.log(chatMessage);
+    if (chatMessage !== undefined) {
+      if (chatMessage !== lastProcessedMessage) {
         if (
           message.forward_from_chat &&
           H25ChannelId == message.forward_from_chat.id.toString()
         ) {
           console.log("Processing bonus code via h25 API");
-          await processBonusCode(axiosInstance, message.caption);
+          await processBonusCode(axiosInstance, chatMessage);
           await botSendMessageToDestinationChannel(bot);
         } else if (
           message.forward_from_chat &&
           T6ChannelId == message.forward_from_chat.id.toString()
         ) {
           console.log("Processing bonus code via T6 API");
-          await processBonusCodeT6(axiosInstanceT6, message.caption);
+          await processBonusCodeT6(axiosInstanceT6, chatMessage);
         }
-        lastProcessedMessage = message.caption;
+        lastProcessedMessage = chatMessage;
       } else {
         console.log(
           "Skipping processBonusCode as caption is the same as previous."
