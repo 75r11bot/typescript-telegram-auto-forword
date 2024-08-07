@@ -40,7 +40,7 @@ const sourceChannelIds = process.env.SOURCE_CHANNEL_IDS
 const resultChannelId = process.env.RESULT_CHANNEL_ID || "";
 const phoneNumber = process.env.APP_YOUR_PHONE || "";
 const userPassword = process.env.APP_YOUR_PWD || "";
-const port = Number(process.env.PORT) || 5100;
+const port = Number(process.env.PORT) || 5000;
 const sessionsDirectory = siteConfig.sessionsDirectory;
 const sessionFilePath = siteConfig.sessionFileName;
 const MAX_RETRIES = 5;
@@ -340,10 +340,7 @@ async function initializeService() {
             // Adjust with correct IDs
             console.log("Received message from H25 THAILAND:", messageText);
             try {
-              const result = await processBonusCode(axiosInstance, messageText);
-              if (result) {
-                await sendResultMessage(result);
-              }
+              await processBonusCode(axiosInstance, messageText);
             } catch (error) {
               console.error("Error processing H25 bonus code:", error);
             }
@@ -352,14 +349,7 @@ async function initializeService() {
             // Adjust with correct IDs
             console.log("Received message from T6 Thailand:", messageText);
             try {
-              const result = await processBonusCodeT6(
-                axiosInstanceT6,
-                messageText
-              );
-
-              if (result) {
-                await sendResultMessage(result);
-              }
+              await processBonusCodeT6(axiosInstanceT6, messageText);
             } catch (error) {
               console.error("Error processing T6 bonus code:", error);
             }

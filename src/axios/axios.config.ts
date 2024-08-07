@@ -9,6 +9,7 @@ const endpoints = [
   process.env.API_ENDPOINT_1,
   process.env.API_ENDPOINT_2,
   process.env.API_ENDPOINT_3,
+  process.env.API_ENDPOINT_4,
 ].filter(Boolean) as string[];
 
 const t6Endpoint = process.env.API_ENDPOINT_T6 || "";
@@ -16,8 +17,8 @@ const timestamp = moment(new Date()).format("YYYY-MM-DD HH:mm:ss").toString();
 
 // Initialize Axios instance for H25
 async function initializeAxiosInstance(): Promise<AxiosInstance> {
-  const siteId = "1451470260579512322";
-  const siteCode = "ybaxcf-4";
+  const siteId = siteConfig.siteId;
+  const siteCode = "ysysju-4";
   const platformType = "2";
   const h25Username = siteConfig.h25User || "";
   const h25Password = siteConfig.h25Password || "";
@@ -64,7 +65,6 @@ async function initializeAxiosInstance(): Promise<AxiosInstance> {
         Origin: sourceDomain,
         Pragma: "no-cache",
         Referer: `${sourceDomain}/`,
-        dnt: 1,
         "Sec-Ch-Ua":
           '"Google Chrome";v="123", "Not:A-Brand";v="8", "Chromium";v="123"',
         "Sec-Ch-Ua-Mobile": "?0",
@@ -72,11 +72,12 @@ async function initializeAxiosInstance(): Promise<AxiosInstance> {
         "Sec-Fetch-Dest": "empty",
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Site": "same-origin",
+        dnt: 1,
         Token: token,
         Sign: sign,
         Timestamp: timestamp,
         "User-Agent":
-          "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
+          "Mozilla/5.0 (Linux; Android 7.0; SM-G950U Build/NRD90M) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.84 Mobile Safari/537.36",
       };
 
       const axiosInstance = axios.create({
@@ -96,7 +97,6 @@ async function initializeAxiosInstance(): Promise<AxiosInstance> {
         } else if (responseData.code === 10140) {
           console.log(`Token ${token} is expired at endpoint ${endpoint}.`);
           token = await getH25Token(h25Username, h25Password);
-
           if (!token) {
             console.log("Failed to retrieve a new token.");
             continue;
@@ -125,7 +125,7 @@ async function checkAxiosInstance(
   axiosInstance: AxiosInstance
 ): Promise<AxiosInstance> {
   try {
-    const siteId = "1451470260579512322";
+    const siteId = siteConfig.siteId;
     const siteCode = "ybaxcf-4";
     const platformType = "2";
 

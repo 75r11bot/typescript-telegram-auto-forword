@@ -30,13 +30,13 @@ async function initializeBot(
   console.log("Initializing the Telegram bot");
   if (botStarted) return;
   botStarted = true;
-  axiosInstance = await checkAxiosInstance(axiosInstance);
-  axiosInstanceT6 = await checkAxiosInstanceT6(axiosInstanceT6);
+
   bot = new Telegraf(botToken);
 
   bot.start((ctx) => ctx.reply("Bot started!"));
 
-  // axiosInstance = await checkAxiosInstance(axiosInstance);
+  axiosInstance = await checkAxiosInstance(axiosInstance);
+  axiosInstanceT6 = await checkAxiosInstanceT6(axiosInstanceT6);
   console.log("Bot ready to receive messages");
 
   bot.on("message", async (ctx: any) => {
@@ -53,12 +53,13 @@ async function initializeBot(
       chatMessage = message.text;
     }
 
-    console.log(chatMessage);
     if (chatMessage !== undefined) {
       if (chatMessage !== lastProcessedMessage) {
         if (
-          message.forward_from_chat &&
-          H25ChannelId == message.forward_from_chat.id.toString()
+          (message.forward_from_chat &&
+            H25ChannelId == message.forward_from_chat.id.toString()) ||
+          (message.forward_from_chat &&
+            "-1002177575823" == message.forward_from_chat.id.toString())
         ) {
           console.log("Processing bonus code via h25 API");
           await processBonusCode(axiosInstance, chatMessage);
