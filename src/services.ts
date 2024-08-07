@@ -56,8 +56,8 @@ async function sendRequest(
   const formData: FormData = {
     platformType: process.env.PLATFORM_TYPE || "2",
     isCancelDiscount: "F",
-    siteId: process.env.SITE_ID || "1451470260579512322",
-    siteCode: process.env.SITE_CODE || "ybaxcf-4",
+    siteId: siteConfig.siteId,
+    siteCode: process.env.SITE_CODE || "ysysju-4",
     cardNo: cardNo,
   };
 
@@ -360,7 +360,10 @@ async function calculateRealTimeRebate(axiosInstance: AxiosInstance) {
       ) {
         const updateUrl = `/v/realTimeRebate/updateAmount`;
         const dataPayload = new FormData();
-        dataPayload.append("platformType", siteConfig.platformType);
+        dataPayload.append(
+          "platformType",
+          siteConfig.platformType.toLocaleString()
+        );
         dataPayload.append("siteId", siteConfig.siteId);
         dataPayload.append("siteCode", siteConfig.siteCode);
         dataPayload.append(

@@ -9,14 +9,16 @@ const endpoints = [
   process.env.API_ENDPOINT_1,
   process.env.API_ENDPOINT_2,
   process.env.API_ENDPOINT_3,
+  process.env.API_ENDPOINT_4,
 ].filter(Boolean) as string[];
 
 const t6Endpoint = process.env.API_ENDPOINT_T6 || "";
 const timestamp = moment(new Date()).format("YYYY-MM-DD HH:mm:ss").toString();
+
 // Initialize Axios instance for H25
 async function initializeAxiosInstance(): Promise<AxiosInstance> {
-  const siteId = "1451470260579512322";
-  const siteCode = "ybaxcf-4";
+  const siteId = siteConfig.siteId;
+  const siteCode = "ysysju-4";
   const platformType = "2";
   const h25Username = siteConfig.h25User || "";
   const h25Password = siteConfig.h25Password || "";
@@ -123,7 +125,7 @@ async function checkAxiosInstance(
   axiosInstance: AxiosInstance
 ): Promise<AxiosInstance> {
   try {
-    const siteId = "1451470260579512322";
+    const siteId = siteConfig.siteId;
     const siteCode = "ybaxcf-4";
     const platformType = "2";
 

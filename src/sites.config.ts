@@ -1,5 +1,7 @@
 import fs from "fs";
 import dotenv from "dotenv";
+import { v4 as uuidv4 } from "uuid";
+import { SiteConfig } from "./types/site.config.types"; // Import the SiteConfig type
 
 // Load environment variables from .env file
 dotenv.config();
@@ -22,11 +24,48 @@ const bonusT6ChannelId = process.env.BONUS_T6_CHANNEL_ID || "-4238605872";
 const bonusH25ChannelId = process.env.BONUS_H25_CHANNEL_ID || "-4266183930";
 const T6ChannelId = process.env.T6_CHANNEL_ID || "-1001951928932";
 const H25ChannelId = process.env.H25_CHANNEL_ID || "-1001836737719";
-const siteId = 1451470260579512322;
-const siteCode = "ybaxcf-4";
 const platformType = 2;
+
+// Function to generate a unique siteId
+function genSiteid(): string {
+  const digits = Array.from({ length: 17 }, () =>
+    Math.floor(Math.random() * 10)
+  );
+  return "14" + digits.join("");
+}
+
+// Function to generate a random siteCode
+function genSiteCode(): string {
+  // Helper function to generate a random string of specified length
+  function generateRandomString(length: number): string {
+    const characters = "abcdefghijklmnopqrstuvwxyz";
+    let result = "";
+    for (let i = 0; i < length; i++) {
+      const randomIndex = Math.floor(Math.random() * characters.length);
+      result += characters[randomIndex];
+    }
+    return result;
+  }
+
+  const randomString = generateRandomString(6); // Generate a random string of exactly 6 characters
+  const randomDigit = Math.floor(Math.random() * 10); // Generate a random digit (0-9)
+  return `${randomString}-${randomDigit}`; // Combine them into the desired format
+}
+
+// Function to simulate retrieving sitePO data
+function getSitePO() {
+  return {
+    id: genSiteid(), // Generate a unique siteId
+    siteCode: genSiteCode(), // Generate a unique siteCode
+  };
+}
+
+// Retrieve sitePO data
+const sitePO = getSitePO();
+console.log(sitePO);
+
 // Define the site configuration based on the current environment
-let siteConfig: any;
+let siteConfig: SiteConfig; // Explicitly type siteConfig
 
 switch (NODE_ENV) {
   case ENV_DEVELOPMENT:
@@ -34,19 +73,19 @@ switch (NODE_ENV) {
       siteName: "local-host",
       baseURL: BASE_URL,
       botToken: "6417397590:AAE7IoO4QeiPLWOZXGR8_Z8TdVfZU2bKb3E",
-      h25User: h25User,
-      h25Password: h25Password,
-      t6User: t6User,
-      t6Password: t6Password,
+      h25User,
+      h25Password,
+      t6User,
+      t6Password,
       sessionsDirectory: "./sessions/local-host",
       sessionFileName: "./sessions/local-host/local_session.txt",
       bonusT6: bonusT6ChannelId,
       bonusH25: bonusH25ChannelId,
       chatT6: T6ChannelId,
       chatH25: H25ChannelId,
-      siteCode: siteCode,
-      siteId: siteId,
-      platformType: platformType,
+      siteCode: sitePO.siteCode,
+      siteId: sitePO.id,
+      platformType,
     };
     break;
   case ENV_PRODUCTION:
@@ -54,19 +93,19 @@ switch (NODE_ENV) {
       siteName: "render-host",
       baseURL: BASE_URL,
       botToken: "7393640522:AAHOsuZebF33nso9AX71nB02wUyAeMnOBkM",
-      h25User: h25User,
-      h25Password: h25Password,
-      t6User: t6User,
-      t6Password: t6Password,
+      h25User,
+      h25Password,
+      t6User,
+      t6Password,
       sessionsDirectory: "./sessions/render-host",
       sessionFileName: "./sessions/render-host/render_session.txt",
       bonusT6: bonusT6ChannelId,
       bonusH25: bonusH25ChannelId,
       chatT6: T6ChannelId,
       chatH25: H25ChannelId,
-      siteCode: siteCode,
-      siteId: siteId,
-      platformType: platformType,
+      siteCode: sitePO.siteCode,
+      siteId: sitePO.id,
+      platformType,
     };
     break;
   case ENV_DEVELOP_DOCKER:
@@ -74,19 +113,19 @@ switch (NODE_ENV) {
       siteName: "docker-host",
       baseURL: BASE_URL,
       botToken: "7064883047:AAHQqcByGbSpdY19LQCc99i4ITU_1nK12wM",
-      h25User: h25User,
-      h25Password: h25Password,
-      t6User: t6User,
-      t6Password: t6Password,
+      h25User,
+      h25Password,
+      t6User,
+      t6Password,
       sessionsDirectory: "./sessions/docker-host",
       sessionFileName: "./sessions/docker-host/docker_session.txt",
       bonusT6: bonusT6ChannelId,
       bonusH25: bonusH25ChannelId,
       chatT6: T6ChannelId,
       chatH25: H25ChannelId,
-      siteCode: siteCode,
-      siteId: siteId,
-      platformType: platformType,
+      siteCode: sitePO.siteCode,
+      siteId: sitePO.id,
+      platformType,
     };
     break;
   default:
@@ -94,19 +133,19 @@ switch (NODE_ENV) {
       siteName: "default-host",
       baseURL: BASE_URL,
       botToken: "",
-      h25User: h25User,
-      h25Password: h25Password,
-      t6User: t6User,
-      t6Password: t6Password,
+      h25User,
+      h25Password,
+      t6User,
+      t6Password,
       sessionsDirectory: "./sessions/default-host",
       sessionFileName: "./sessions/default-host/default_session.txt",
       bonusT6: bonusT6ChannelId,
       bonusH25: bonusH25ChannelId,
       chatT6: T6ChannelId,
       chatH25: H25ChannelId,
-      siteCode: siteCode,
-      siteId: siteId,
-      platformType: platformType,
+      siteCode: sitePO.siteCode,
+      siteId: sitePO.id,
+      platformType,
     };
     break;
 }
