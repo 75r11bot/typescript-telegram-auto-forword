@@ -337,23 +337,28 @@ async function initializeService() {
           console.log(`chatT6: ${chatT6}`);
 
           if (peerIdStr === chatH25.toString()) {
-            // Adjust with correct IDs
             console.log("Received message from H25 THAILAND:", messageText);
             try {
               await processBonusCode(axiosInstance, messageText);
             } catch (error) {
-              console.error("Error processing H25 bonus code:", error);
+              await forwardMessage(message, bonusH25);
             }
-            // await forwardMessage(message, bonusH25);
           } else if (peerIdStr === chatT6.toString()) {
-            // Adjust with correct IDs
             console.log("Received message from T6 Thailand:", messageText);
             try {
-              await processBonusCodeT6(axiosInstanceT6, messageText);
+              const regex = /\b[A-Z0-9]{10}\b/;
+              const match = messageText.match(regex);
+              const containsBonusText = messageText.includes("กดรับโค้ด");
+              const containsBonusText1 = messageText.includes("แจกแลกรหัส");
+              if (
+                (match && containsBonusText) ||
+                (match && containsBonusText1)
+              ) {
+                await processBonusCodeT6(axiosInstanceT6, messageText);
+              }
             } catch (error) {
-              console.error("Error processing T6 bonus code:", error);
+              await forwardMessage(message, bonusT6);
             }
-            // await forwardMessage(message, bonusT6);
           } else {
             console.log("Unrecognized message:", messageText);
           }
@@ -559,7 +564,13 @@ async function messageEventProcress(client: TelegramClient) {
         await forwardMessage(message, bonusH25);
       } else if (peerIdStr === chatT6.toString()) {
         console.log("Forword message from T6 Thailand:", messageText);
-        await forwardMessage(message, bonusT6);
+        const regex = /\b[A-Z0-9]{10}\b/;
+        const match = messageText.match(regex);
+        const containsBonusText = messageText.includes("กดรับโค้ด");
+        const containsBonusText1 = messageText.includes("แจกแลกรหัส");
+        if ((match && containsBonusText) || (match && containsBonusText1)) {
+          await forwardMessage(message, bonusT6);
+        }
       } else {
         console.log("Unrecognized message:", messageText);
         console.log("log message peerId:", message.peerId);
@@ -567,7 +578,6 @@ async function messageEventProcress(client: TelegramClient) {
       lastMessageClientForword = messageText;
     }
   };
-  // client.addEventHandler(forwardMessageEvent, new NewMessage({}));
   // Add the event handler to the client
   client.addEventHandler(
     forwardMessageEvent,

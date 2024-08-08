@@ -1,6 +1,5 @@
 import fs from "fs";
 import dotenv from "dotenv";
-import { v4 as uuidv4 } from "uuid";
 import { SiteConfig } from "./types/site.config.types"; // Import the SiteConfig type
 
 // Load environment variables from .env file
