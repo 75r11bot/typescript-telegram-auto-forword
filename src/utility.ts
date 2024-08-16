@@ -173,8 +173,9 @@ async function loginT6WebCaptureResponse(
   let loginTimeout: number = 15000;
 
   try {
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 100000 });
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
 
+    // Capture the session from the login response
     page.on("response", async (response) => {
       if (response.url().includes("/api/login/member")) {
         try {
@@ -189,131 +190,33 @@ async function loginT6WebCaptureResponse(
       }
     });
 
-    // Check if modal is present and handle the close button
-    let modalClosed = false;
-    try {
-      const modal = await page.waitForSelector(".ant-modal.imageModalCls", {
-        timeout: 30000,
-        state: "visible",
-      });
+    // Interact with the login form
+    await page.getByPlaceholder("ชื่อผู้ใช้").click();
+    await page.getByPlaceholder("ชื่อผู้ใช้").fill(user);
+    await page.getByPlaceholder("รหัสผ่าน").click();
+    await page.getByPlaceholder("รหัสผ่าน").fill(password);
+    await page
+      .locator("form")
+      .getByRole("button", { name: "เข้าสู่ระบบ" })
+      .click();
 
-      if (modal) {
-        console.log("Modal found, waiting for Close button");
-        const closeButton = await page.getByLabel("Close");
+    // Wait for login success indicator
+    const loginSuccessT6 = await page.waitForSelector(".accountCls > .pic", {
+      timeout: loginTimeout,
+      state: "visible",
+    });
 
-        if (closeButton) {
-          console.log("Element Close modal button is ready, clicking it.");
-          await closeButton.click();
-          modalClosed = true;
-        } else {
-          console.error("Element Close modal button not found");
-        }
-      }
-    } catch (error) {
-      console.error(
-        "Modal not found or error waiting for Close button:",
-        error
-      );
-    }
-
-    // Retry if the modal wasn't closed successfully
-    if (!modalClosed) {
-      try {
-        await page.waitForTimeout(5000); // Wait a bit before retrying
-        const closeButton = await page.getByLabel("Close");
-
-        if (closeButton) {
-          console.log(
-            "Retrying: Element Close modal button is ready, clicking it."
-          );
-          await closeButton.click();
-        } else {
-          console.error("Retrying: Element Close modal button not found");
-        }
-      } catch (retryError) {
-        console.error(
-          "Retry failed: Modal not found or error waiting for Close button:",
-          retryError
-        );
-
-        // Capture screenshot for debugging
-        const screenshotPath = path.resolve(
-          `${imagesDirectoryT6}/close_button_retry_error.png`
-        );
-        await page.screenshot({ path: screenshotPath });
-        console.log(`Screenshot captured: ${screenshotPath}`);
-      }
-    }
-
-    console.log("Waiting for Login button");
-    const loginButton = await page.getByRole("button", { name: "เข้าสู่ระบบ" });
-
-    if (loginButton) {
-      console.log("Element Login modal button is ready, clicking it.");
-      await loginButton.click();
+    if (loginSuccessT6) {
+      console.log("Successfully logged in to T6.");
     } else {
-      console.error("Element Login modal button not found");
-    }
-
-    // Check if login dialog is displayed
-    try {
-      const loginDialog =
-        (await page
-          .getByRole("dialog")
-          .locator("div")
-          .filter({
-            hasText:
-              "ชื่อผู้ใช้ *รหัสผ่าน *เข้าสู่ระบบลืมรหัสผ่าน?ไม่มีบัญชี? ลงทะเบียนบัญชี",
-          })
-          .nth(1)) ||
-        (await page.waitForSelector(".ant-modal.YellowGreenLoginModalCls", {
-          state: "visible",
-          timeout: 10000,
-        }));
-
-      if (loginDialog) {
-        await page.getByPlaceholder("ชื่อผู้ใช้").fill(user);
-        await page.getByPlaceholder("รหัสผ่าน").fill(password);
-
-        console.log("Waiting for Submit button");
-        const submitButton = await page
-          .getByRole("dialog")
-          .getByRole("button", { name: "เข้าสู่ระบบ" });
-
-        if (submitButton) {
-          console.log("Element Submit Login button is ready, clicking it.");
-          await submitButton.click();
-        } else {
-          console.error("Element Submit Login button not found");
-        }
-
-        console.log("Waiting for login success indicator");
-        const loginSuccessT6 =
-          (await page.waitForSelector(".accountCls > .pic", {
-            timeout: loginTimeout,
-            state: "visible",
-          })) || (await page.locator(".accountCls"));
-
-        if (loginSuccessT6) {
-          console.log("Successfully logged in to T6.");
-        } else {
-          console.error("Failed to find login success indicator.");
-        }
-      } else {
-        console.error("Login dialog not found");
-      }
-    } catch (error) {
-      console.error("Error waiting for login dialog:", error);
-
-      // Capture screenshot for debugging
-      const screenshotPath = path.resolve(
-        `${imagesDirectoryT6}/login_dialog_error.png`
-      );
-      await page.screenshot({ path: screenshotPath });
-      console.log(`Screenshot captured: ${screenshotPath}`);
+      console.error("Failed to find login success indicator.");
     }
   } catch (error) {
     console.error("Error occurred during login:", error);
+    // Capture screenshot for debugging
+    const screenshotPath = path.resolve(`${imagesDirectoryT6}/login_error.png`);
+    await page.screenshot({ path: screenshotPath });
+    console.log(`Screenshot captured: ${screenshotPath}`);
   }
 
   return { session };
@@ -440,7 +343,7 @@ async function getT6Session(
     browser = await chromium.launch({ headless: true });
     context = await browser.newContext();
     let page = await context.newPage();
-    const loginUrl = t6Endpoint.replace("/api", "/th-th/home");
+    const loginUrl = t6Endpoint.replace("/api", "/th-th/login");
 
     if (!loginUrl) {
       console.error("No ready login URL found.");
@@ -462,7 +365,7 @@ async function getT6Session(
       page = await context.newPage();
       await page.waitForTimeout(5000);
 
-      const loginUrl = t6Endpoint.replace("/api", "/th-th/home");
+      const loginUrl = t6Endpoint.replace("/api", "/th-th/login");
 
       if (!loginUrl) {
         console.error("No ready login URL found.");

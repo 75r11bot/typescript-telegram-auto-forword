@@ -40,7 +40,7 @@ const sourceChannelIds = process.env.SOURCE_CHANNEL_IDS
 const resultChannelId = process.env.RESULT_CHANNEL_ID || "";
 const phoneNumber = process.env.APP_YOUR_PHONE || "";
 const userPassword = process.env.APP_YOUR_PWD || "";
-const port = Number(process.env.PORT) || 5001;
+const port = Number(process.env.PORT) || 5100;
 const sessionsDirectory = siteConfig.sessionsDirectory;
 const sessionFilePath = siteConfig.sessionFileName;
 const MAX_RETRIES = 5;
@@ -322,10 +322,18 @@ async function initializeService() {
           let peerIdStr;
 
           if (peerId instanceof Api.PeerChannel) {
-            peerIdStr = "-100" + peerId.channelId.valueOf().toString(); // Use valueOf to get the numeric value
+            peerIdStr = "-100" + peerId.channelId.toString();
+          } else if (peerId instanceof Api.PeerChat) {
+            peerIdStr = parseInt(peerId.chatId.toString(), 10);
+          } else if (peerId instanceof Api.PeerUser) {
+            // Directly convert BigInt to string
+            peerIdStr = peerId.userId.toString();
           } else {
-            peerIdStr = peerId.toString();
+            peerIdStr = JSON.stringify(peerId);
           }
+
+          console.log("peerId:", peerId); // Log the entire peerId object
+          console.log("peerIdStr:", peerIdStr); // Log the stringified peerId
 
           console.log(
             `Received message '${messageText}' from peer ID '${peerIdStr}'`
@@ -336,7 +344,7 @@ async function initializeService() {
           console.log(`chatH25: ${chatH25}`);
           console.log(`chatT6: ${chatT6}`);
 
-          if (peerIdStr === chatH25.toString()) {
+          if (peerIdStr === chatH25.toString() || peerIdStr === "6742160125") {
             console.log("Received message from H25 THAILAND:", messageText);
             try {
               await processBonusCode(axiosInstance, messageText);
@@ -365,13 +373,15 @@ async function initializeService() {
           lastMessageClient = messageText;
         }
       },
-      new NewMessage({
-        chats: [
-          -1001836737719, // H25 THAILAND 🇹🇭
-          -1001951928932, // T6 Thailand ®
-        ],
-        incoming: true,
-      })
+      new NewMessage({})
+      // new NewMessage({
+      //   chats: [
+      //     -1001836737719, // H25 THAILAND 🇹🇭
+      //     -1001951928932, // T6 Thailand ®
+      //     6742160125, //Title: H25VIP_bot
+      //   ],
+      //   incoming: true,
+      // })
     );
   };
 
@@ -542,13 +552,23 @@ async function messageEventProcress(client: TelegramClient) {
     const peerId = message.peerId;
 
     if (messageText && peerId) {
-      let peerIdStr;
       if (lastMessageClientForword === messageText) return;
+
+      let peerIdStr;
+
       if (peerId instanceof Api.PeerChannel) {
-        peerIdStr = "-100" + peerId.channelId.valueOf().toString();
+        peerIdStr = "-100" + peerId.channelId.toString();
+      } else if (peerId instanceof Api.PeerChat) {
+        peerIdStr = parseInt(peerId.chatId.toString(), 10);
+      } else if (peerId instanceof Api.PeerUser) {
+        // Directly convert BigInt to string
+        peerIdStr = peerId.userId.toString();
       } else {
-        peerIdStr = peerId.toString();
+        peerIdStr = JSON.stringify(peerId);
       }
+
+      console.log("peerId:", peerId); // Log the entire peerId object
+      console.log("peerIdStr:", peerIdStr); // Log the stringified peerId
 
       console.log(
         `Received message '${messageText}' from peer ID Channel :'${peerIdStr}'`
@@ -559,7 +579,7 @@ async function messageEventProcress(client: TelegramClient) {
       console.log(`chatH25: ${chatH25}`);
       console.log(`chatT6: ${chatT6}`);
 
-      if (peerIdStr === chatH25.toString()) {
+      if (peerIdStr === chatH25.toString() || peerIdStr === "6742160125") {
         console.log("Forword message from H25 THAILAND:", messageText);
         await forwardMessage(message, bonusH25);
       } else if (peerIdStr === chatT6.toString()) {
@@ -578,17 +598,19 @@ async function messageEventProcress(client: TelegramClient) {
       lastMessageClientForword = messageText;
     }
   };
-  // Add the event handler to the client
-  client.addEventHandler(
-    forwardMessageEvent,
-    new NewMessage({
-      chats: [
-        -1001836737719, // H25 THAILAND 🇹🇭
-        -1001951928932, // T6 Thailand ®
-      ],
-      incoming: true,
-    })
-  );
+  // // Add the event handler to the client
+  // client.addEventHandler(
+  //   forwardMessageEvent,
+  //   new NewMessage({
+  //     chats: [
+  //       -1001836737719, // H25 THAILAND 🇹🇭
+  //       -1001951928932, // T6 Thailand ®
+  //       6742160125, //Title: H25VIP_bot
+  //     ],
+  //     incoming: true,
+  //   })
+  // );
+  client.addEventHandler(forwardMessageEvent, new NewMessage({}));
 }
 
 async function getChatsList(client: TelegramClient) {
