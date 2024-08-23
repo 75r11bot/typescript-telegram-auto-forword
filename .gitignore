@@ -29,3 +29,4 @@ dist/**/*.gitignore
 
 # Windows-specific files
 Thumbs.db
+yarn.lock
