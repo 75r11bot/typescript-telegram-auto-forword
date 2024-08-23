@@ -9,7 +9,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "types": ["node"]  // <-- Add this line to include Node.js types
+    "types": ["node"]  // Ensure this line is present
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]

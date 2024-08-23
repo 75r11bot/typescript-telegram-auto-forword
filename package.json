@@ -2,6 +2,7 @@
   "name": "telegram-auto-forward",
   "version": "1.0.0",
   "main": "dist/main.js",
+  "types": "node_modules/@types",
   "license": "MIT",
   "dependencies": {
     "@grammyjs/types": "^3.7.0",
