@@ -4,7 +4,7 @@ services:
   telegram-auto-forward:
     build: .
     ports:
-      - "5003:5001"
+      - "5100:5100"
     environment:
       - NODE_ENV=develop_docker
       - API_ID=${API_ID}
@@ -23,9 +23,11 @@ services:
       - PLATFORM_TYPE=${PLATFORM_TYPE}
       - DEVICE_CODE=${DEVICE_CODE}
       - SIGN=${SIGN}
-      - BASE_URL=http://localhost:5003
-      - H25_USER=noon75
+      - BASE_URL=http://localhost:5100
+      - H25_USER=manus9331
       - H25_PASSWORD=nnnn9331
+      - T6_USER=Arun0011
+      - T6_PASSWORD=Arun0011
       - URL_LOGIN_APP=${URL_LOGIN_APP}
       - URL_LOGIN_WEB=${URL_LOGIN_WEB}
       - BOT_RESULT_CHANNEL_ID=${BOT_RESULT_CHANNEL_ID}
