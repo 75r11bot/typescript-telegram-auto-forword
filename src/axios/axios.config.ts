@@ -48,9 +48,9 @@ async function initializeAxiosInstance(): Promise<AxiosInstance> {
         }
       }
 
-      const deviceCode = process.env.DEVICE_CODE || "";
+      const deviceCode = siteConfig.deviceCode;
       const sourceDomain = endpoint.replace("/api", "");
-      const sign = process.env.SIGN || "";
+      const sign = siteConfig.siteSign;
 
       const headers = {
         Accept: "application/json, text/plain, */*",

@@ -1,4 +1,5 @@
 import fs from "fs";
+import path from "path";
 import dotenv from "dotenv";
 import { SiteConfig } from "./types/site.config.types"; // Import the SiteConfig type
 
@@ -47,20 +48,65 @@ function genSiteCode(): string {
   }
 
   const randomString = generateRandomString(6); // Generate a random string of exactly 6 characters
-  const randomDigit = Math.floor(Math.random() * 10); // Generate a random digit (0-9)
+  const randomDigit = 4; //Math.floor(Math.random() * 10); // Generate a random digit (0-9)
   return `${randomString}-${randomDigit}`; // Combine them into the desired format
 }
 
-// Function to simulate retrieving sitePO data
-function getSitePO() {
-  return {
-    id: genSiteid(), // Generate a unique siteId
-    siteCode: genSiteCode(), // Generate a unique siteCode
-  };
+// Function to generate a random siteSign as a combination of letters and numbers
+function genSiteSign(): string {
+  const length = 32; // Desired length of the siteSign
+  const characters =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  let sign = "";
+
+  for (let i = 0; i < length; i++) {
+    const randomIndex = Math.floor(Math.random() * characters.length);
+    sign += characters[randomIndex];
+  }
+
+  return sign.toUpperCase(); // Convert to uppercase if needed
 }
 
-// Retrieve sitePO data
-const sitePO = getSitePO();
+// Function to generate a random deviceCode
+function genDeviceCode(): string {
+  const code = Array.from({ length: 9 }, () =>
+    Math.floor(Math.random() * 9)
+  ).join("");
+  return `deviceCode=${code}`;
+}
+// Function to load or generate sitePO data
+interface SitePO {
+  siteCode: string;
+  siteId: string;
+  siteSign: string;
+  deviceCode: string;
+}
+
+function loadOrGenerateSitePO(): SitePO {
+  const filePath = path.join(__dirname, "sitePO.json");
+
+  if (fs.existsSync(filePath)) {
+    // If the file exists, read and return the values
+    const data = fs.readFileSync(filePath, "utf8");
+    return JSON.parse(data);
+  } else {
+    // Generate the values if the file doesn't exist
+    const sitePO = {
+      siteCode: genSiteCode(),
+      siteId: genSiteid(),
+      siteSign: genSiteSign(),
+      deviceCode: genDeviceCode(),
+    };
+
+    // Save the generated values to the file
+    fs.writeFileSync(filePath, JSON.stringify(sitePO), "utf8");
+
+    return sitePO;
+  }
+}
+
+// Retrieve or generate sitePO data
+const sitePO = loadOrGenerateSitePO();
 console.log(sitePO);
 
 // Define the site configuration based on the current environment
@@ -83,7 +129,9 @@ switch (NODE_ENV) {
       chatT6: T6ChannelId,
       chatH25: H25ChannelId,
       siteCode: sitePO.siteCode,
-      siteId: sitePO.id,
+      siteId: sitePO.siteId,
+      siteSign: sitePO.siteSign,
+      deviceCode: sitePO.deviceCode,
       platformType,
     };
     break;
@@ -103,7 +151,9 @@ switch (NODE_ENV) {
       chatT6: T6ChannelId,
       chatH25: H25ChannelId,
       siteCode: sitePO.siteCode,
-      siteId: sitePO.id,
+      siteId: sitePO.siteId,
+      siteSign: sitePO.siteSign,
+      deviceCode: sitePO.deviceCode,
       platformType,
     };
     break;
@@ -123,7 +173,9 @@ switch (NODE_ENV) {
       chatT6: T6ChannelId,
       chatH25: H25ChannelId,
       siteCode: sitePO.siteCode,
-      siteId: sitePO.id,
+      siteId: sitePO.siteId,
+      siteSign: sitePO.siteSign,
+      deviceCode: sitePO.deviceCode,
       platformType,
     };
     break;
@@ -143,7 +195,9 @@ switch (NODE_ENV) {
       chatT6: T6ChannelId,
       chatH25: H25ChannelId,
       siteCode: sitePO.siteCode,
-      siteId: sitePO.id,
+      siteId: sitePO.siteId,
+      siteSign: sitePO.siteSign,
+      deviceCode: sitePO.deviceCode,
       platformType,
     };
     break;

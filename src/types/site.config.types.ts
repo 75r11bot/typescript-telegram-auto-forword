@@ -15,5 +15,7 @@ export interface SiteConfig {
   chatH25: string;
   siteCode: string;
   siteId: string;
+  siteSign: string;
+  deviceCode: string;
   platformType: number | string;
 }
